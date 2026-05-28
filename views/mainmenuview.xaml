@@ -1,0 +1,40 @@
+<UserControl x:Class="anartsgame.views.MainMenuView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:anartsgame.viewmodels"
+             Background="#0a0a0a">
+    <UserControl.DataContext>
+        <vm:MainMenuViewModel/>
+    </UserControl.DataContext>
+
+    <Grid>
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="300">
+            <TextBlock Text="anarts"
+                       FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
+                       FontSize="48"
+                       Foreground="#00ff00"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,60"/>
+
+            <Button Content="нова гра"
+                    Command="{Binding NewGameCommand}"
+                    Style="{StaticResource MenuButtonStyle}"
+                    Margin="0,0,0,15"/>
+
+            <Button Content="продовжити"
+                    Command="{Binding ContinueCommand}"
+                    Style="{StaticResource MenuButtonStyle}"
+                    IsEnabled="{Binding HasSaveGame}"
+                    Margin="0,0,0,15"/>
+
+            <Button Content="налаштування"
+                    Command="{Binding SettingsCommand}"
+                    Style="{StaticResource MenuButtonStyle}"
+                    Margin="0,0,0,15"/>
+
+            <Button Content="вихід"
+                    Command="{Binding ExitCommand}"
+                    Style="{StaticResource MenuButtonStyle}"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

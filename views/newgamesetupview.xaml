@@ -1,0 +1,33 @@
+<UserControl x:Class="anartsgame.views.NewGameSetupView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:anartsgame.viewmodels"
+             Background="#0a0a0a">
+    <UserControl.DataContext>
+        <vm:NewGameSetupViewModel/>
+    </UserControl.DataContext>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="нова гра"
+                   FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
+                   FontSize="36"
+                   Foreground="#00ff00"
+                   HorizontalAlignment="Center"
+                   Margin="0,40,0,0"/>
+
+        <StackPanel Grid.Row="2"
+                    HorizontalAlignment="Center"
+                    Margin="0,0,0,40">
+            <Button Content="почати гру"
+                    Command="{Binding StartGameCommand}"
+                    Style="{StaticResource MenuButtonStyle}"
+                    Width="250"/>
+        </StackPanel>
+    </Grid>
+</UserControl>
