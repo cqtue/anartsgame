@@ -2,7 +2,12 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:anartsgame.viewmodels"
+             xmlns:services="clr-namespace:anartsgame.services"
+             xmlns:converters="clr-namespace:anartsgame.converters"
              Background="#0a0a0a">
+    <UserControl.Resources>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+    </UserControl.Resources>
     <UserControl.DataContext>
         <vm:SettingsViewModel/>
     </UserControl.DataContext>
@@ -14,7 +19,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="налаштування"
+        <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_Title]}"
                    FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                    FontSize="36"
                    Foreground="#00ff00"
@@ -26,7 +31,22 @@
                     VerticalAlignment="Center"
                     Width="500">
 
-            <TextBlock Text="загальна гучність"
+            <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_Language]}"
+                       FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
+                       FontSize="16"
+                       Foreground="#00ff00"
+                       Margin="0,0,0,10"/>
+            <ComboBox ItemsSource="{Binding AvailableLanguages}"
+                      SelectedIndex="{Binding SelectedLanguageIndex, Mode=TwoWay}"
+                      IsEnabled="{Binding IsGameActive, Converter={StaticResource InverseBooleanConverter}}"
+                      FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
+                      FontSize="16"
+                      Foreground="#00ff00"
+                      Background="#1a1a1a"
+                      BorderBrush="#00ff00"
+                      Margin="0,0,0,30"/>
+
+            <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_MasterVolume]}"
                        FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                        FontSize="16"
                        Foreground="#00ff00"
@@ -51,7 +71,7 @@
                            VerticalAlignment="Center"/>
             </Grid>
 
-            <TextBlock Text="гучність звуків"
+            <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_SoundVolume]}"
                        FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                        FontSize="16"
                        Foreground="#00ff00"
@@ -76,7 +96,7 @@
                            VerticalAlignment="Center"/>
             </Grid>
 
-            <TextBlock Text="гучність музики"
+            <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_MusicVolume]}"
                        FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                        FontSize="16"
                        Foreground="#00ff00"
@@ -101,7 +121,7 @@
                            VerticalAlignment="Center"/>
             </Grid>
 
-            <CheckBox Content="повноекранний режим"
+            <CheckBox Content="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_Fullscreen]}"
                       IsChecked="{Binding IsFullscreen, Mode=TwoWay}"
                       FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                       FontSize="16"
@@ -135,7 +155,7 @@
                 </CheckBox.Style>
             </CheckBox>
 
-            <CheckBox Content="вертикальна синхронізація"
+            <CheckBox Content="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_Vsync]}"
                       IsChecked="{Binding IsVsyncEnabled, Mode=TwoWay}"
                       FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                       FontSize="16"
@@ -173,12 +193,12 @@
                     Orientation="Horizontal"
                     HorizontalAlignment="Center"
                     Margin="0,0,0,40">
-            <Button Content="зберегти"
+            <Button Content="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_Save]}"
                     Command="{Binding SaveCommand}"
                     Style="{StaticResource MenuButtonStyle}"
                     Width="200"
                     Margin="0,0,20,0"/>
-            <Button Content="назад"
+            <Button Content="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Settings_Back]}"
                     Command="{Binding BackCommand}"
                     Style="{StaticResource MenuButtonStyle}"
                     Width="200"/>

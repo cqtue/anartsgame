@@ -86,4 +86,9 @@ public class NavigationService
         _returnToGameWithPause = false; // Reset after reading
         return value;
     }
+
+    public bool IsGameActive()
+    {
+        return _returnToGameWithPause;
+    }
 }

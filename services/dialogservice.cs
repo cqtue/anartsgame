@@ -80,7 +80,7 @@ public class DialogService
 
             var confirmButton = new Button
             {
-                Content = "так",
+                Content = LocalizationService.Instance["Dialog_Yes"],
                 Width = 120,
                 Margin = new Thickness(0, 0, 20, 0)
             };
@@ -88,7 +88,7 @@ public class DialogService
 
             var cancelButton = new Button
             {
-                Content = "ні",
+                Content = LocalizationService.Instance["Dialog_No"],
                 Width = 120
             };
             cancelButton.SetResourceReference(Button.StyleProperty, "MenuButtonStyle");

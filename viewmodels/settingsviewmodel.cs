@@ -12,12 +12,15 @@ public class SettingsViewModel : BaseViewModel
     private bool _isFullscreen;
     private bool _isVsyncEnabled;
     private bool _hasUnsavedChanges;
+    private int _selectedLanguageIndex;
+    private bool _isGameActive;
 
     private double _originalMasterVolume;
     private double _originalSoundVolume;
     private double _originalMusicVolume;
     private bool _originalIsFullscreen;
     private bool _originalIsVsyncEnabled;
+    private int _originalSelectedLanguageIndex;
 
     public double MasterVolume
     {
@@ -75,6 +78,24 @@ public class SettingsViewModel : BaseViewModel
         set => SetProperty(ref _hasUnsavedChanges, value);
     }
 
+    public int SelectedLanguageIndex
+    {
+        get => _selectedLanguageIndex;
+        set
+        {
+            if (SetProperty(ref _selectedLanguageIndex, value))
+                CheckForChanges();
+        }
+    }
+
+    public List<string> AvailableLanguages { get; } = new() { "Українська", "English" };
+
+    public bool IsGameActive
+    {
+        get => _isGameActive;
+        set => SetProperty(ref _isGameActive, value);
+    }
+
     public ICommand SaveCommand { get; }
     public ICommand BackCommand { get; }
 
@@ -87,6 +108,8 @@ public class SettingsViewModel : BaseViewModel
         _musicVolume = _originalMusicVolume = _settingsService.MusicVolume;
         _isFullscreen = _originalIsFullscreen = _settingsService.IsFullscreen;
         _isVsyncEnabled = _originalIsVsyncEnabled = _settingsService.IsVsyncEnabled;
+        _selectedLanguageIndex = _originalSelectedLanguageIndex = AvailableLanguages.IndexOf(_settingsService.Language);
+        _isGameActive = NavigationService.Instance.IsGameActive();
 
         SaveCommand = new RelayCommand(_ => SaveSettings());
         BackCommand = new RelayCommand(_ => NavigateBack());
@@ -98,7 +121,8 @@ public class SettingsViewModel : BaseViewModel
                            _soundVolume != _originalSoundVolume ||
                            _musicVolume != _originalMusicVolume ||
                            _isFullscreen != _originalIsFullscreen ||
-                           _isVsyncEnabled != _originalIsVsyncEnabled;
+                           _isVsyncEnabled != _originalIsVsyncEnabled ||
+                           _selectedLanguageIndex != _originalSelectedLanguageIndex;
     }
 
     private void SaveSettings()
@@ -108,16 +132,21 @@ public class SettingsViewModel : BaseViewModel
         _settingsService.MusicVolume = _musicVolume;
         _settingsService.IsFullscreen = _isFullscreen;
         _settingsService.IsVsyncEnabled = _isVsyncEnabled;
+        _settingsService.Language = AvailableLanguages[_selectedLanguageIndex];
         _settingsService.Save();
 
         if (_isFullscreen != _originalIsFullscreen)
             _settingsService.ApplyFullscreenMode();
+
+        if (_selectedLanguageIndex != _originalSelectedLanguageIndex)
+            LocalizationService.Instance.SetLanguage(AvailableLanguages[_selectedLanguageIndex]);
 
         _originalMasterVolume = _masterVolume;
         _originalSoundVolume = _soundVolume;
         _originalMusicVolume = _musicVolume;
         _originalIsFullscreen = _isFullscreen;
         _originalIsVsyncEnabled = _isVsyncEnabled;
+        _originalSelectedLanguageIndex = _selectedLanguageIndex;
 
         HasUnsavedChanges = false;
     }
@@ -127,7 +156,7 @@ public class SettingsViewModel : BaseViewModel
         if (HasUnsavedChanges)
         {
             DialogService.Instance.ShowConfirmDialog(
-                "у вас є незбережені зміни. відхилити їх?",
+                LocalizationService.Instance["Settings_UnsavedChanges"],
                 () => PerformNavigation(),
                 () => { }
             );

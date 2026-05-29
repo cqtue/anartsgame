@@ -10,7 +10,7 @@ public enum BuildingType
     Mine,
     MeatFactory,
     Sawmill,
-    Market,
+    Bank,
     Marketplace,
     Furnace
 }
@@ -82,7 +82,7 @@ public class Building
                 CanProduce = true;
                 InitializeSawmillProduction(level);
                 break;
-            case BuildingType.Market:
+            case BuildingType.Bank:
                 BuildRadius = 150;
                 Size = 45;
                 CanProduce = false;
@@ -329,7 +329,7 @@ public class Building
                         break;
                 }
                 break;
-            case BuildingType.Market:
+            case BuildingType.Bank:
                 switch (Level)
                 {
                     case 1:
@@ -373,7 +373,7 @@ public class Building
                 cost[ResourceType.Metal] = 105;
                 cost[ResourceType.Organic] = 165;
                 break;
-            case BuildingType.Market:
+            case BuildingType.Bank:
                 cost[ResourceType.Wood] = 600;
                 cost[ResourceType.Organic] = 200;
                 break;
@@ -392,6 +392,6 @@ public class Building
 
     public bool CanUpgrade()
     {
-        return Type != BuildingType.Base && Type != BuildingType.Market && Type != BuildingType.Marketplace && (Type != BuildingType.Furnace || Level < 2) && Level < 5;
+        return Type != BuildingType.Base && Type != BuildingType.Bank && Type != BuildingType.Marketplace && (Type != BuildingType.Furnace || Level < 2) && Level < 5;
     }
 }

@@ -1,6 +1,7 @@
 <UserControl x:Class="anartsgame.views.GameView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:anartsgame.services"
              Background="#0a0a0a"
              Focusable="True">
     <UserControl.Resources>
@@ -88,7 +89,7 @@
             </Grid.Background>
 
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="300">
-                <TextBlock Text="ПАУЗА"
+                <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Game_Pause]}"
                            FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                            FontSize="48"
                            Foreground="#00ff00"
@@ -96,22 +97,38 @@
                            Margin="0,0,0,60"/>
 
                 <Button x:Name="ResumeButton"
-                        Content="продовжити"
+                        Content="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Game_Resume]}"
                         Style="{StaticResource MenuButtonStyle}"
                         Margin="0,0,0,15"
                         Click="ResumeButton_Click"/>
 
                 <Button x:Name="PauseSettingsButton"
-                        Content="налаштування"
+                        Content="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Game_Settings]}"
                         Style="{StaticResource MenuButtonStyle}"
                         Margin="0,0,0,15"
                         Click="PauseSettingsButton_Click"/>
 
                 <Button x:Name="SaveAndExitButton"
-                        Content="зберегти та вийти"
+                        Content="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Game_SaveAndExit]}"
                         Style="{StaticResource MenuButtonStyle}"
                         Click="SaveAndExitButton_Click"/>
             </StackPanel>
+        </Grid>
+
+        <Grid x:Name="DebugConsole" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="400" Height="40" Margin="20,0,0,20">
+            <Grid.Background>
+                <SolidColorBrush Color="#1a1a1a" Opacity="0.9"/>
+            </Grid.Background>
+            <TextBox x:Name="ConsoleInput"
+                     Background="Transparent"
+                     Foreground="#00ff00"
+                     BorderThickness="1"
+                     BorderBrush="#00ff00"
+                     FontFamily="Consolas"
+                     FontSize="14"
+                     Padding="5"
+                     VerticalContentAlignment="Center"
+                     KeyDown="ConsoleInput_KeyDown"/>
         </Grid>
     </Grid>
 </UserControl>

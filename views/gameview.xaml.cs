@@ -57,6 +57,15 @@ public partial class GameView : UserControl
     private Research? _currentResearch = null;
     private bool _isPaused = false;
     private bool _isLoadingFromSave = false;
+    private bool _infiniteBuildDistance = false;
+
+    // Manual gathering state
+    private bool _isGathering = false;
+    private object? _gatheringTarget = null;
+    private double _gatheringProgress = 0;
+    private double _gatheringDuration = 0;
+    private ResourceType _gatheringResourceType;
+    private Border? _gatheringProgressContainer = null;
 
     public GameView(bool loadFromSave = false)
     {
@@ -109,6 +118,8 @@ public partial class GameView : UserControl
             RenderMap();
             CenterCamera();
         }
+
+        Focus();
     }
 
     private void GenerateMap()
@@ -643,7 +654,7 @@ public partial class GameView : UserControl
                             nearResource = distanceToResource <= 100;
                         }
 
-                        canPlace = withinBuildingRadius && nearResource && !hasOverlap;
+                        canPlace = (_infiniteBuildDistance || withinBuildingRadius) && nearResource && !hasOverlap;
                     }
                     else if (_selectedBuildingType == BuildingType.Sawmill)
                     {
@@ -663,24 +674,37 @@ public partial class GameView : UserControl
                             nearTree = distanceToTree <= 100;
                         }
 
-                        canPlace = withinBuildingRadius && nearTree && !hasOverlap;
+                        canPlace = (_infiniteBuildDistance || withinBuildingRadius) && nearTree && !hasOverlap;
                     }
-                    else if (_selectedBuildingType == BuildingType.Market || _selectedBuildingType == BuildingType.Marketplace)
+                    else if (_selectedBuildingType == BuildingType.Bank)
                     {
-                        bool marketExists = _map.Buildings.Any(b => b.Type == BuildingType.Market || b.Type == BuildingType.Marketplace);
+                        bool bankExists = _map.Buildings.Any(b => b.Type == BuildingType.Bank);
 
-                        if (marketExists)
+                        if (bankExists)
                         {
                             canPlace = false;
                         }
                         else
                         {
-                            canPlace = withinBuildingRadius && !hasOverlap;
+                            canPlace = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
+                        }
+                    }
+                    else if (_selectedBuildingType == BuildingType.Marketplace)
+                    {
+                        bool marketplaceExists = _map.Buildings.Any(b => b.Type == BuildingType.Marketplace);
+
+                        if (marketplaceExists)
+                        {
+                            canPlace = false;
+                        }
+                        else
+                        {
+                            canPlace = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
                         }
                     }
                     else
                     {
-                        canPlace = withinBuildingRadius && !hasOverlap;
+                        canPlace = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
                     }
 
                     if (canPlace)
@@ -776,6 +800,66 @@ public partial class GameView : UserControl
             }
         }
 
+        if (!_isBuildMode && e.ChangedButton == MouseButton.Left)
+        {
+            if (_isPaused || _gameSpeed == 0)
+            {
+                return;
+            }
+
+            Point screenPos = e.GetPosition(ViewportGrid);
+            Point mapPos = _transformGroup.Inverse.Transform(screenPos);
+
+            var nearestBuilding = FindNearestBuilding(mapPos);
+            if (nearestBuilding != null)
+            {
+                double distanceToBuilding = Math.Sqrt(
+                    Math.Pow(mapPos.X - nearestBuilding.Position.X, 2) +
+                    Math.Pow(mapPos.Y - nearestBuilding.Position.Y, 2)
+                );
+                if (distanceToBuilding <= nearestBuilding.Size / 2)
+                {
+                    return;
+                }
+            }
+
+            var nearestTree = FindNearestTileOfType(mapPos, TileType.Tree);
+            if (nearestTree != null)
+            {
+                double tilePixelX = nearestTree.X * TileSize + nearestTree.OffsetX;
+                double tilePixelY = nearestTree.Y * TileSize + nearestTree.OffsetY;
+                double distanceToTree = Math.Sqrt(
+                    Math.Pow(mapPos.X - tilePixelX, 2) +
+                    Math.Pow(mapPos.Y - tilePixelY, 2)
+                );
+
+                if (distanceToTree <= 40)
+                {
+                    StartGathering(nearestTree, ResourceType.Wood, 1.0, screenPos);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            var nearestRock = FindNearestTileOfType(mapPos, TileType.Rock);
+            if (nearestRock != null)
+            {
+                double tilePixelX = nearestRock.X * TileSize + nearestRock.OffsetX;
+                double tilePixelY = nearestRock.Y * TileSize + nearestRock.OffsetY;
+                double distanceToRock = Math.Sqrt(
+                    Math.Pow(mapPos.X - tilePixelX, 2) +
+                    Math.Pow(mapPos.Y - tilePixelY, 2)
+                );
+
+                if (distanceToRock <= 40)
+                {
+                    StartGathering(nearestRock, ResourceType.Metal, 2.0, screenPos);
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
         if (e.MiddleButton == MouseButtonState.Pressed && !_isBuildMode)
         {
             _isPanning = true;
@@ -803,7 +887,7 @@ public partial class GameView : UserControl
             BuildingType.Mine => Color.FromRgb(150, 150, 150),
             BuildingType.MeatFactory => Color.FromRgb(180, 80, 80),
             BuildingType.Sawmill => Color.FromRgb(139, 90, 43),
-            BuildingType.Market => Color.FromRgb(200, 180, 50),
+            BuildingType.Bank => Color.FromRgb(200, 180, 50),
             BuildingType.Marketplace => Color.FromRgb(220, 200, 80),
             BuildingType.Furnace => Color.FromRgb(200, 100, 30),
             _ => Color.FromRgb(128, 128, 128)
@@ -849,6 +933,12 @@ public partial class GameView : UserControl
 
     private void OnMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton == MouseButton.Left && _isGathering)
+        {
+            StopGathering();
+            e.Handled = true;
+        }
+
         if (e.MiddleButton == MouseButtonState.Released && _isPanning)
         {
             _isPanning = false;
@@ -858,8 +948,75 @@ public partial class GameView : UserControl
         }
     }
 
+    private void StartGathering(Tile target, ResourceType resourceType, double duration, Point screenPos)
+    {
+        _isGathering = true;
+        _gatheringTarget = target;
+        _gatheringProgress = 0;
+        _gatheringDuration = duration;
+        _gatheringResourceType = resourceType;
+
+        CreateGatheringProgressBar(screenPos);
+    }
+
+    private void StopGathering()
+    {
+        _isGathering = false;
+        _gatheringTarget = null;
+        _gatheringProgress = 0;
+
+        if (_gatheringProgressContainer != null)
+        {
+            ViewportGrid.Children.Remove(_gatheringProgressContainer);
+            _gatheringProgressContainer = null;
+        }
+    }
+
+    private void CreateGatheringProgressBar(Point screenPos)
+    {
+        var progressBar = new System.Windows.Controls.ProgressBar
+        {
+            Width = 100,
+            Height = 15,
+            Minimum = 0,
+            Maximum = 1,
+            Value = 0,
+            Foreground = new SolidColorBrush(Color.FromRgb(0, 255, 0)),
+            Background = new SolidColorBrush(Color.FromRgb(50, 50, 50)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0, 255, 0)),
+            BorderThickness = new Thickness(1)
+        };
+
+        _gatheringProgressContainer = new Border
+        {
+            Child = progressBar,
+            Background = new SolidColorBrush(Color.FromArgb(200, 26, 26, 26)),
+            Padding = new Thickness(5),
+            CornerRadius = new CornerRadius(3),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(screenPos.X + 10, screenPos.Y - 30, 0, 0)
+        };
+
+        ViewportGrid.Children.Add(_gatheringProgressContainer);
+    }
+
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F12)
+        {
+            DebugConsole.Visibility = DebugConsole.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+            if (DebugConsole.Visibility == Visibility.Visible)
+            {
+                ConsoleInput.Focus();
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape)
         {
             if (_currentOpenPanel != "")
@@ -911,6 +1068,54 @@ public partial class GameView : UserControl
         ShowPauseMenu();
     }
 
+    private void ConsoleInput_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            string command = ConsoleInput.Text.Trim().ToLower();
+            ExecuteConsoleCommand(command);
+            ConsoleInput.Text = "";
+            e.Handled = true;
+        }
+    }
+
+    private void ExecuteConsoleCommand(string command)
+    {
+        switch (command)
+        {
+            case "save":
+                SaveGameState();
+                break;
+
+            case "adddna":
+                _resources[ResourceType.Metal] += 10000;
+                _resources[ResourceType.Organic] += 10000;
+                _resources[ResourceType.Meat] += 10000;
+                _resources[ResourceType.Wood] += 10000;
+                _resources[ResourceType.Coal] += 10000;
+                UpdateResourceDisplay();
+                break;
+
+            case "anydis":
+                _infiniteBuildDistance = !_infiniteBuildDistance;
+                break;
+
+            case "allresear":
+                foreach (var research in _availableResearch)
+                {
+                    research.IsCompleted = true;
+                    research.Progress = 100;
+                    if (!_completedResearch.Contains(research))
+                    {
+                        _completedResearch.Add(research);
+                    }
+                }
+                _availableResearch.Clear();
+                _currentResearch = null;
+                break;
+        }
+    }
+
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
         if (_isPanning && e.MiddleButton == MouseButtonState.Pressed)
@@ -960,7 +1165,7 @@ public partial class GameView : UserControl
             }
             else
             {
-                errorMessage = "Занадто далеко від будівель";
+                errorMessage = services.LocalizationService.Instance["Game_Error_TooFar"];
             }
 
             bool isValid = false;
@@ -985,22 +1190,22 @@ public partial class GameView : UserControl
 
                 if (!withinBuildingRadius && !nearResource)
                 {
-                    errorMessage = "Шахта: занадто далеко від будівель та каменів";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_MineRocksFar"];
                 }
                 else if (!withinBuildingRadius)
                 {
-                    errorMessage = "Шахта: занадто далеко від будівель";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_MineBuildingsFar"];
                 }
                 else if (!nearResource)
                 {
-                    errorMessage = "Шахта: має бути біля каменів";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_MineNoRocks"];
                 }
                 else if (hasOverlap)
                 {
-                    errorMessage = "Перетинається з іншою будівлею";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_Overlap"];
                 }
 
-                isValid = withinBuildingRadius && nearResource && !hasOverlap;
+                isValid = (_infiniteBuildDistance || withinBuildingRadius) && nearResource && !hasOverlap;
             }
             else if (_selectedBuildingType == BuildingType.Sawmill)
             {
@@ -1022,57 +1227,79 @@ public partial class GameView : UserControl
 
                 if (!withinBuildingRadius && !nearTree)
                 {
-                    errorMessage = "Лісопилка: занадто далеко від будівель та дерев";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_SawmillTreesFar"];
                 }
                 else if (!withinBuildingRadius)
                 {
-                    errorMessage = "Лісопилка: занадто далеко від будівель";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_SawmillBuildingsFar"];
                 }
                 else if (!nearTree)
                 {
-                    errorMessage = "Лісопилка: має бути біля дерев";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_SawmillNoTrees"];
                 }
                 else if (hasOverlap)
                 {
-                    errorMessage = "Перетинається з іншою будівлею";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_Overlap"];
                 }
 
-                isValid = withinBuildingRadius && nearTree && !hasOverlap;
+                isValid = (_infiniteBuildDistance || withinBuildingRadius) && nearTree && !hasOverlap;
             }
-            else if (_selectedBuildingType == BuildingType.Market || _selectedBuildingType == BuildingType.Marketplace)
+            else if (_selectedBuildingType == BuildingType.Bank)
             {
-                bool marketExists = _map.Buildings.Any(b => b.Type == BuildingType.Market || b.Type == BuildingType.Marketplace);
+                bool bankExists = _map.Buildings.Any(b => b.Type == BuildingType.Bank);
 
-                if (marketExists)
+                if (bankExists)
                 {
-                    errorMessage = "Маркет може бути лише один";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_BankLimit"];
                     isValid = false;
                 }
                 else if (!withinBuildingRadius)
                 {
-                    errorMessage = "Занадто далеко від будівель";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_TooFar"];
                 }
                 else if (hasOverlap)
                 {
-                    errorMessage = "Перетинається з іншою будівлею";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_Overlap"];
                 }
                 else
                 {
-                    isValid = withinBuildingRadius && !hasOverlap;
+                    isValid = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
+                }
+            }
+            else if (_selectedBuildingType == BuildingType.Marketplace)
+            {
+                bool marketplaceExists = _map.Buildings.Any(b => b.Type == BuildingType.Marketplace);
+
+                if (marketplaceExists)
+                {
+                    errorMessage = services.LocalizationService.Instance["Game_Error_MarketLimit"];
+                    isValid = false;
+                }
+                else if (!withinBuildingRadius)
+                {
+                    errorMessage = services.LocalizationService.Instance["Game_Error_TooFar"];
+                }
+                else if (hasOverlap)
+                {
+                    errorMessage = services.LocalizationService.Instance["Game_Error_Overlap"];
+                }
+                else
+                {
+                    isValid = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
                 }
             }
             else
             {
                 if (!withinBuildingRadius)
                 {
-                    errorMessage = "Занадто далеко від будівель";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_TooFar"];
                 }
                 else if (hasOverlap)
                 {
-                    errorMessage = "Перетинається з іншою будівлею";
+                    errorMessage = services.LocalizationService.Instance["Game_Error_Overlap"];
                 }
 
-                isValid = withinBuildingRadius && !hasOverlap;
+                isValid = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
             }
 
             if (isValid)
@@ -1246,6 +1473,7 @@ public partial class GameView : UserControl
             UpdateResourceDisplay();
             UpdateResearch(deltaTime);
             UpdateInvestment(deltaTime);
+            UpdateGathering(deltaTime);
         }
     }
 
@@ -1282,7 +1510,7 @@ public partial class GameView : UserControl
 
         foreach (var building in _map.Buildings)
         {
-            if (building.Type == BuildingType.Market)
+            if (building.Type == BuildingType.Bank)
             {
                 if (building.IsInvesting)
                 {
@@ -1334,6 +1562,34 @@ public partial class GameView : UserControl
         }
     }
 
+    private void UpdateGathering(double deltaTime)
+    {
+        if (!_isGathering || _gatheringTarget == null) return;
+
+        _gatheringProgress += deltaTime / _gatheringDuration;
+
+        if (_gatheringProgressContainer != null)
+        {
+            var progressBar = _gatheringProgressContainer.Child as System.Windows.Controls.ProgressBar;
+            if (progressBar != null)
+            {
+                progressBar.Value = Math.Min(_gatheringProgress, 1.0);
+            }
+        }
+
+        if (_gatheringProgress >= 1.0)
+        {
+            if (!_resources.ContainsKey(_gatheringResourceType))
+            {
+                _resources[_gatheringResourceType] = 0;
+            }
+            _resources[_gatheringResourceType] += 1;
+            UpdateResourceDisplay();
+
+            _gatheringProgress = 0;
+        }
+    }
+
     private bool IsResearchCompleted(ResearchType type)
     {
         return _completedResearch.Any(r => r.Type == type);
@@ -1357,6 +1613,16 @@ public partial class GameView : UserControl
     private double GetBuildCostMultiplier()
     {
         return IsResearchCompleted(ResearchType.EfficientConstruction) ? 0.8 : 1.0;
+    }
+
+    private Dictionary<ResourceType, int> ApplyCostMultiplier(Dictionary<ResourceType, int> baseCost, double multiplier)
+    {
+        var adjustedCost = new Dictionary<ResourceType, int>();
+        foreach (var cost in baseCost)
+        {
+            adjustedCost[cost.Key] = (int)(cost.Value * multiplier);
+        }
+        return adjustedCost;
     }
 
     private double GetResearchSpeedMultiplier()
@@ -1494,12 +1760,12 @@ public partial class GameView : UserControl
     {
         return resourceType switch
         {
-            ResourceType.Metal => "Метал",
-            ResourceType.Organic => "Органіка",
-            ResourceType.Meat => "М'ясо",
-            ResourceType.Wood => "Дерево",
-            ResourceType.Coal => "Вуголь",
-            _ => "Ресурс"
+            ResourceType.Metal => services.LocalizationService.Instance["Resource_Metal"],
+            ResourceType.Organic => services.LocalizationService.Instance["Resource_Organic"],
+            ResourceType.Meat => services.LocalizationService.Instance["Resource_Meat"],
+            ResourceType.Wood => services.LocalizationService.Instance["Resource_Wood"],
+            ResourceType.Coal => services.LocalizationService.Instance["Resource_Coal"],
+            _ => services.LocalizationService.Instance["Resource_Generic"]
         };
     }
 
@@ -1511,10 +1777,12 @@ public partial class GameView : UserControl
         }
 
         var upgradeCost = building.GetUpgradeCost();
+        double costMultiplier = GetBuildCostMultiplier();
 
         foreach (var cost in upgradeCost)
         {
-            if (!_resources.ContainsKey(cost.Key) || _resources[cost.Key] < cost.Value)
+            int adjustedCost = (int)(cost.Value * costMultiplier);
+            if (!_resources.ContainsKey(cost.Key) || _resources[cost.Key] < adjustedCost)
             {
                 return;
             }
@@ -1522,7 +1790,8 @@ public partial class GameView : UserControl
 
         foreach (var cost in upgradeCost)
         {
-            _resources[cost.Key] -= cost.Value;
+            int adjustedCost = (int)(cost.Value * costMultiplier);
+            _resources[cost.Key] -= adjustedCost;
         }
 
         building.Level++;
@@ -1580,7 +1849,7 @@ public partial class GameView : UserControl
 
     private void StartInvestment(Building building, ResourceType resourceType, int amount)
     {
-        if (building.Type != BuildingType.Market || building.IsInvesting || building.InvestmentCooldown > 0)
+        if (building.Type != BuildingType.Bank || building.IsInvesting || building.InvestmentCooldown > 0)
         {
             return;
         }
@@ -1632,17 +1901,17 @@ public partial class GameView : UserControl
 
     private void BuildButton_Click(object sender, RoutedEventArgs e)
     {
-        ToggleRightPanel("build", "БУДІВНИЦТВО");
+        ToggleRightPanel("build", services.LocalizationService.Instance["Panel_Build"]);
     }
 
     private void ResearchButton_Click(object sender, RoutedEventArgs e)
     {
-        ToggleRightPanel("research", "ДОСЛІДЖЕННЯ");
+        ToggleRightPanel("research", services.LocalizationService.Instance["Panel_Research"]);
     }
 
     private void TradeButton_Click(object sender, RoutedEventArgs e)
     {
-        ToggleRightPanel("trade", "ТРЕЙДИНГ");
+        ToggleRightPanel("trade", services.LocalizationService.Instance["Panel_Trade"]);
     }
 
     private void ResumeButton_Click(object sender, RoutedEventArgs e)
@@ -1763,71 +2032,72 @@ public partial class GameView : UserControl
     private UIElement CreateBuildPanelContent()
     {
         var panel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+        double costMultiplier = GetBuildCostMultiplier();
 
-        var factoryCost = Building.GetBuildCost(BuildingType.Factory);
+        var factoryCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Factory), costMultiplier);
         var factoryButton = new Button
         {
-            Content = $"ФАБРИКА\n{FormatCost(factoryCost)}",
+            Content = $"{services.LocalizationService.Instance["Building_Factory"]}\n{FormatCost(factoryCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
             Style = (Style)FindResource("GameButtonStyle")
         };
         factoryButton.Click += (s, e) => StartBuildMode(BuildingType.Factory);
 
-        var mineCost = Building.GetBuildCost(BuildingType.Mine);
+        var mineCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Mine), costMultiplier);
         var mineButton = new Button
         {
-            Content = $"ШАХТА\n{FormatCost(mineCost)}",
+            Content = $"{services.LocalizationService.Instance["Building_Mine"]}\n{FormatCost(mineCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
             Style = (Style)FindResource("GameButtonStyle")
         };
         mineButton.Click += (s, e) => StartBuildMode(BuildingType.Mine);
 
-        var meatFactoryCost = Building.GetBuildCost(BuildingType.MeatFactory);
+        var meatFactoryCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.MeatFactory), costMultiplier);
         var meatFactoryButton = new Button
         {
-            Content = $"М'ЯСОФАБРИКА\n{FormatCost(meatFactoryCost)}",
+            Content = $"{services.LocalizationService.Instance["Building_MeatFactory"]}\n{FormatCost(meatFactoryCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
             Style = (Style)FindResource("GameButtonStyle")
         };
         meatFactoryButton.Click += (s, e) => StartBuildMode(BuildingType.MeatFactory);
 
-        var sawmillCost = Building.GetBuildCost(BuildingType.Sawmill);
+        var sawmillCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Sawmill), costMultiplier);
         var sawmillButton = new Button
         {
-            Content = $"ЛІСОПИЛКА\n{FormatCost(sawmillCost)}",
+            Content = $"{services.LocalizationService.Instance["Building_Sawmill"]}\n{FormatCost(sawmillCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
             Style = (Style)FindResource("GameButtonStyle")
         };
         sawmillButton.Click += (s, e) => StartBuildMode(BuildingType.Sawmill);
 
-        var marketCost = Building.GetBuildCost(BuildingType.Market);
-        var marketButton = new Button
+        var bankCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Bank), costMultiplier);
+        var bankButton = new Button
         {
-            Content = $"РИНОК\n{FormatCost(marketCost)}",
+            Content = $"{services.LocalizationService.Instance["Building_Bank"]}\n{FormatCost(bankCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
             Style = (Style)FindResource("GameButtonStyle")
         };
-        marketButton.Click += (s, e) => StartBuildMode(BuildingType.Market);
+        bankButton.Click += (s, e) => StartBuildMode(BuildingType.Bank);
 
-        var marketplaceCost = Building.GetBuildCost(BuildingType.Marketplace);
+        var marketplaceCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Marketplace), costMultiplier);
         var marketplaceButton = new Button
         {
-            Content = $"МАРКЕТ\n{FormatCost(marketplaceCost)}",
+            Content = $"{services.LocalizationService.Instance["Building_Marketplace"]}\n{FormatCost(marketplaceCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
             Style = (Style)FindResource("GameButtonStyle")
         };
         marketplaceButton.Click += (s, e) => StartBuildMode(BuildingType.Marketplace);
 
-        var furnaceCost = Building.GetBuildCost(BuildingType.Furnace);
+        var furnaceCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Furnace), costMultiplier);
         var furnaceButton = new Button
         {
-            Content = $"ПЕЧКА\n{FormatCost(furnaceCost)}",
+            Content = $"{services.LocalizationService.Instance["Building_Furnace"]}\n{FormatCost(furnaceCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
             Style = (Style)FindResource("GameButtonStyle")
@@ -1838,7 +2108,7 @@ public partial class GameView : UserControl
         panel.Children.Add(mineButton);
         panel.Children.Add(meatFactoryButton);
         panel.Children.Add(sawmillButton);
-        panel.Children.Add(marketButton);
+        panel.Children.Add(bankButton);
         panel.Children.Add(marketplaceButton);
         panel.Children.Add(furnaceButton);
 
@@ -1850,15 +2120,7 @@ public partial class GameView : UserControl
         var parts = new List<string>();
         foreach (var item in cost)
         {
-            string resourceName = item.Key switch
-            {
-                ResourceType.Metal => "Метал",
-                ResourceType.Organic => "Органіка",
-                ResourceType.Meat => "М'ясо",
-                ResourceType.Wood => "Дерево",
-                ResourceType.Coal => "Вугілля",
-                _ => item.Key.ToString()
-            };
+            string resourceName = GetResourceName(item.Key);
             parts.Add($"{item.Value} {resourceName}");
         }
         return string.Join(", ", parts);
@@ -1895,7 +2157,7 @@ public partial class GameView : UserControl
 
             var timeText = new TextBlock
             {
-                Text = $"Залишилось: {(_currentResearch.Duration * (1 - _currentResearch.Progress)):F1}с",
+                Text = $"{services.LocalizationService.Instance["Research_Remaining"]} {(_currentResearch.Duration * (1 - _currentResearch.Progress)):F1}с",
                 Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                 FontSize = 11
             };
@@ -1906,7 +2168,7 @@ public partial class GameView : UserControl
 
         var availableLabel = new TextBlock
         {
-            Text = "ДОСТУПНІ ДОСЛІДЖЕННЯ:",
+            Text = services.LocalizationService.Instance["Research_Available"],
             Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
             FontSize = 12,
             Margin = new Thickness(0, 0, 0, 10)
@@ -1952,7 +2214,7 @@ public partial class GameView : UserControl
 
             var costLabel = new TextBlock
             {
-                Text = $"Вартість: {costText}",
+                Text = $"{services.LocalizationService.Instance["Research_Cost"]} {costText}",
                 Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                 FontSize = 10,
                 Margin = new Thickness(5, 0, 5, 5)
@@ -1961,7 +2223,7 @@ public partial class GameView : UserControl
 
             var researchButton = new Button
             {
-                Content = $"ДОСЛІДИТИ ({research.Duration}с)",
+                Content = $"{services.LocalizationService.Instance["Research_Button"]} ({research.Duration}с)",
                 Height = 35,
                 Margin = new Thickness(5, 0, 5, 5),
                 Style = (Style)FindResource("GameButtonStyle"),
@@ -2003,7 +2265,7 @@ public partial class GameView : UserControl
         {
             var messageText = new TextBlock
             {
-                Text = "Потрібно побудувати Маркет для торгівлі",
+                Text = services.LocalizationService.Instance["Trade_NeedMarket"],
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 100, 100)),
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
@@ -2019,7 +2281,7 @@ public partial class GameView : UserControl
         {
             var infoText = new TextBlock
             {
-                Text = "Крок 1: Оберіть ресурс для обміну",
+                Text = services.LocalizationService.Instance["Trade_Step1"],
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
                 FontSize = 13,
                 FontWeight = FontWeights.Bold,
@@ -2029,7 +2291,7 @@ public partial class GameView : UserControl
 
             var rateText = new TextBlock
             {
-                Text = "Курс обміну: 100% → 60%",
+                Text = services.LocalizationService.Instance["Trade_Rate"],
                 Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                 FontSize = 11,
                 Margin = new Thickness(0, 0, 0, 15)
@@ -2043,7 +2305,7 @@ public partial class GameView : UserControl
 
                 var resourceButton = new Button
                 {
-                    Content = $"{GetResourceName(resource)}\n(є: {_resources[resource]})",
+                    Content = $"{GetResourceName(resource)}\n({services.LocalizationService.Instance["Trade_Has"]} {_resources[resource]})",
                     Height = 60,
                     Margin = new Thickness(0, 0, 0, 10),
                     Style = (Style)FindResource("GameButtonStyle"),
@@ -2064,7 +2326,7 @@ public partial class GameView : UserControl
         {
             var backButton = new Button
             {
-                Content = "← Назад",
+                Content = services.LocalizationService.Instance["Trade_Back"],
                 Width = 100,
                 Height = 35,
                 Margin = new Thickness(0, 0, 0, 15),
@@ -2083,7 +2345,7 @@ public partial class GameView : UserControl
 
             var infoText = new TextBlock
             {
-                Text = $"Крок 2: Оберіть кількість {GetResourceName(_tradeFromResource.Value)}",
+                Text = $"{services.LocalizationService.Instance["Trade_Step2"]} {GetResourceName(_tradeFromResource.Value)}",
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
                 FontSize = 13,
                 FontWeight = FontWeights.Bold,
@@ -2093,7 +2355,7 @@ public partial class GameView : UserControl
 
             var availableText = new TextBlock
             {
-                Text = $"Доступно: {_resources[_tradeFromResource.Value]}",
+                Text = $"{services.LocalizationService.Instance["Trade_Available"]} {_resources[_tradeFromResource.Value]}",
                 Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                 FontSize = 11,
                 Margin = new Thickness(0, 0, 0, 10)
@@ -2102,7 +2364,7 @@ public partial class GameView : UserControl
 
             var amountText = new TextBlock
             {
-                Text = $"Кількість: {_tradeFromAmount}",
+                Text = $"{services.LocalizationService.Instance["Trade_Amount"]} {_tradeFromAmount}",
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
                 FontSize = 12,
                 Margin = new Thickness(0, 0, 0, 5)
@@ -2121,13 +2383,13 @@ public partial class GameView : UserControl
             slider.ValueChanged += (s, e) =>
             {
                 _tradeFromAmount = (int)slider.Value;
-                amountText.Text = $"Кількість: {_tradeFromAmount}";
+                amountText.Text = $"{services.LocalizationService.Instance["Trade_Amount"]} {_tradeFromAmount}";
             };
             panel.Children.Add(slider);
 
             var nextButton = new Button
             {
-                Content = "Далі →",
+                Content = services.LocalizationService.Instance["Trade_Next"],
                 Height = 45,
                 Margin = new Thickness(0, 10, 0, 0),
                 Style = (Style)FindResource("GameButtonStyle"),
@@ -2145,7 +2407,7 @@ public partial class GameView : UserControl
         {
             var backButton = new Button
             {
-                Content = "← Назад",
+                Content = services.LocalizationService.Instance["Trade_Back"],
                 Width = 100,
                 Height = 35,
                 Margin = new Thickness(0, 0, 0, 15),
@@ -2163,7 +2425,7 @@ public partial class GameView : UserControl
 
             var infoText = new TextBlock
             {
-                Text = "Крок 3: Оберіть ресурс для отримання",
+                Text = services.LocalizationService.Instance["Trade_Step3"],
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
                 FontSize = 13,
                 FontWeight = FontWeights.Bold,
@@ -2173,7 +2435,7 @@ public partial class GameView : UserControl
 
             var givingText = new TextBlock
             {
-                Text = $"Віддаєте: {_tradeFromAmount} {GetResourceName(_tradeFromResource.Value)}",
+                Text = $"{services.LocalizationService.Instance["Trade_Giving"]} {_tradeFromAmount} {GetResourceName(_tradeFromResource.Value)}",
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 150, 150)),
                 FontSize = 12,
                 Margin = new Thickness(0, 0, 0, 15)
@@ -2195,7 +2457,7 @@ public partial class GameView : UserControl
 
                 var calcText = new TextBlock
                 {
-                    Text = $"Отримаєте: {receiveAmount} {GetResourceName(_tradeToResource.Value)}",
+                    Text = $"{services.LocalizationService.Instance["Trade_Receive"]} {receiveAmount} {GetResourceName(_tradeToResource.Value)}",
                     Foreground = new SolidColorBrush(Color.FromRgb(150, 250, 150)),
                     FontSize = 13,
                     FontWeight = FontWeights.Bold,
@@ -2205,7 +2467,7 @@ public partial class GameView : UserControl
 
                 var rateText = new TextBlock
                 {
-                    Text = $"Курс: {_tradeFromAmount} → {receiveAmount} ({(int)(0.6 * 100)}%)",
+                    Text = $"{services.LocalizationService.Instance["Trade_RateDisplay"]} {_tradeFromAmount} → {receiveAmount} ({(int)(0.6 * 100)}%)",
                     Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                     FontSize = 11
                 };
@@ -2216,7 +2478,7 @@ public partial class GameView : UserControl
 
                 var confirmButton = new Button
                 {
-                    Content = "✓ Підтвердити обмін",
+                    Content = services.LocalizationService.Instance["Trade_Confirm"],
                     Height = 50,
                     Margin = new Thickness(0, 10, 0, 0),
                     Style = (Style)FindResource("GameButtonStyle"),
@@ -2240,7 +2502,7 @@ public partial class GameView : UserControl
 
                     var resourceButton = new Button
                     {
-                        Content = $"{GetResourceName(resource)}\n(отримаєте: {receiveAmount})",
+                        Content = $"{GetResourceName(resource)}\n({services.LocalizationService.Instance["Trade_WillReceive"]} {receiveAmount})",
                         Height = 60,
                         Margin = new Thickness(0, 0, 0, 10),
                         Style = (Style)FindResource("GameButtonStyle"),
@@ -2452,20 +2714,25 @@ public partial class GameView : UserControl
 
     private void ShowBuildingInfoPanel(Building building)
     {
+        // Only reset delete confirmation if selecting a different building
+        if (_selectedBuilding != building)
+        {
+            _deleteConfirmationState = false;
+        }
+
         _selectedBuilding = building;
-        _deleteConfirmationState = false;
 
         string buildingName = building.Type switch
         {
-            BuildingType.Base => "БАЗА",
-            BuildingType.Factory => "ФАБРИКА",
-            BuildingType.Mine => "ШАХТА",
-            BuildingType.MeatFactory => "М'ЯСОФАБРИКА",
-            BuildingType.Sawmill => "ЛІСОПИЛКА",
-            BuildingType.Market => "РИНОК",
-            BuildingType.Marketplace => "МАРКЕТ",
-            BuildingType.Furnace => "ПЕЧКА",
-            _ => "БУДІВЛЯ"
+            BuildingType.Base => services.LocalizationService.Instance["Building_Base"],
+            BuildingType.Factory => services.LocalizationService.Instance["Building_Factory"],
+            BuildingType.Mine => services.LocalizationService.Instance["Building_Mine"],
+            BuildingType.MeatFactory => services.LocalizationService.Instance["Building_MeatFactory"],
+            BuildingType.Sawmill => services.LocalizationService.Instance["Building_Sawmill"],
+            BuildingType.Bank => services.LocalizationService.Instance["Building_Bank"],
+            BuildingType.Marketplace => services.LocalizationService.Instance["Building_Marketplace"],
+            BuildingType.Furnace => services.LocalizationService.Instance["Building_Furnace"],
+            _ => services.LocalizationService.Instance["Building_Generic"]
         };
 
         _currentOpenPanel = "buildingInfo";
@@ -2480,15 +2747,15 @@ public partial class GameView : UserControl
 
         string description = building.Type switch
         {
-            BuildingType.Base => "Центр управління колонією",
-            BuildingType.Factory => "Виробляє органіку",
-            BuildingType.Mine => "Видобуває метал",
-            BuildingType.MeatFactory => "Виробляє м'ясо",
-            BuildingType.Sawmill => "Видобуває дерево",
-            BuildingType.Market => "Інвестує ресурси для прибутку",
-            BuildingType.Marketplace => "Дозволяє торгувати ресурсами",
-            BuildingType.Furnace => "Переплавляє дерево у вугілля",
-            _ => "Будівля"
+            BuildingType.Base => services.LocalizationService.Instance["BuildingDesc_Base"],
+            BuildingType.Factory => services.LocalizationService.Instance["BuildingDesc_Factory"],
+            BuildingType.Mine => services.LocalizationService.Instance["BuildingDesc_Mine"],
+            BuildingType.MeatFactory => services.LocalizationService.Instance["BuildingDesc_MeatFactory"],
+            BuildingType.Sawmill => services.LocalizationService.Instance["BuildingDesc_Sawmill"],
+            BuildingType.Bank => services.LocalizationService.Instance["BuildingDesc_Bank"],
+            BuildingType.Marketplace => services.LocalizationService.Instance["BuildingDesc_Marketplace"],
+            BuildingType.Furnace => services.LocalizationService.Instance["BuildingDesc_Furnace"],
+            _ => services.LocalizationService.Instance["BuildingDesc_Generic"]
         };
 
         var descriptionText = new TextBlock
@@ -2505,7 +2772,7 @@ public partial class GameView : UserControl
         {
             var levelText = new TextBlock
             {
-                Text = $"Рівень: {building.Level}",
+                Text = $"{services.LocalizationService.Instance["BuildingPanel_Level"]} {building.Level}",
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
                 FontSize = 14,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -2523,6 +2790,8 @@ public partial class GameView : UserControl
             if (building.CanUpgrade())
             {
                 var upgradeCost = building.GetUpgradeCost();
+                double costMultiplier = GetBuildCostMultiplier();
+                var adjustedUpgradeCost = ApplyCostMultiplier(upgradeCost, costMultiplier);
 
                 var upgradeContainer = new StackPanel
                 {
@@ -2531,7 +2800,7 @@ public partial class GameView : UserControl
 
                 var upgradeButton = new Button
                 {
-                    Content = "АПГРЕЙД",
+                    Content = services.LocalizationService.Instance["BuildingPanel_Upgrade"],
                     Width = 120,
                     Height = 45,
                     Style = (Style)FindResource("GameButtonStyle"),
@@ -2539,7 +2808,7 @@ public partial class GameView : UserControl
                 };
 
                 bool canAfford = true;
-                foreach (var cost in upgradeCost)
+                foreach (var cost in adjustedUpgradeCost)
                 {
                     if (!_resources.ContainsKey(cost.Key) || _resources[cost.Key] < cost.Value)
                     {
@@ -2568,7 +2837,7 @@ public partial class GameView : UserControl
                 };
 
                 var costLines = new List<string>();
-                foreach (var cost in upgradeCost)
+                foreach (var cost in adjustedUpgradeCost)
                 {
                     costLines.Add($"{GetResourceName(cost.Key)}: {cost.Value}");
                 }
@@ -2580,7 +2849,7 @@ public partial class GameView : UserControl
 
             var deleteButton = new Button
             {
-                Content = "ВИДАЛИТИ",
+                Content = services.LocalizationService.Instance["BuildingPanel_Delete"],
                 Width = 120,
                 Height = 45,
                 Style = (Style)FindResource("GameButtonStyle")
@@ -2590,7 +2859,7 @@ public partial class GameView : UserControl
                 if (!_deleteConfirmationState)
                 {
                     _deleteConfirmationState = true;
-                    deleteButton.Content = "впевнені?";
+                    deleteButton.Content = services.LocalizationService.Instance["BuildingPanel_Sure"];
                     deleteButton.Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100));
                 }
                 else
@@ -2604,7 +2873,7 @@ public partial class GameView : UserControl
 
             var progressLabel = new TextBlock
             {
-                Text = "ВИРОБНИЦТВО:",
+                Text = services.LocalizationService.Instance["BuildingPanel_Production"],
                 Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                 FontSize = 12,
                 Margin = new Thickness(0, 10, 0, 10)
@@ -2644,11 +2913,11 @@ public partial class GameView : UserControl
                 panel.Children.Add(progressContainer);
             }
 
-            if (building.Type == BuildingType.Market)
+            if (building.Type == BuildingType.Bank)
             {
                 var investmentLabel = new TextBlock
                 {
-                    Text = "ІНВЕСТИЦІЯ:",
+                    Text = services.LocalizationService.Instance["BuildingPanel_Investment"],
                     Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                     FontSize = 12,
                     Margin = new Thickness(0, 10, 0, 10)
@@ -2659,7 +2928,7 @@ public partial class GameView : UserControl
                 {
                     var investingText = new TextBlock
                     {
-                        Text = $"Інвестовано: {building.InvestmentAmount} {GetResourceName(building.InvestmentResource!.Value)}",
+                        Text = $"{services.LocalizationService.Instance["BuildingPanel_Invested"]} {building.InvestmentAmount} {GetResourceName(building.InvestmentResource!.Value)}",
                         Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
                         FontSize = 11,
                         Margin = new Thickness(0, 0, 0, 5)
@@ -2681,7 +2950,7 @@ public partial class GameView : UserControl
                     double timeRemaining = investmentDuration * (1 - building.InvestmentProgress);
                     var timeText = new TextBlock
                     {
-                        Text = $"Залишилось: {timeRemaining:F1}с",
+                        Text = $"{services.LocalizationService.Instance["BuildingPanel_Remaining"]} {timeRemaining:F1}с",
                         Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                         FontSize = 10
                     };
@@ -2691,7 +2960,7 @@ public partial class GameView : UserControl
                 {
                     var cooldownText = new TextBlock
                     {
-                        Text = $"Кулдаун: {building.InvestmentCooldown:F1}с",
+                        Text = $"{services.LocalizationService.Instance["BuildingPanel_Cooldown"]} {building.InvestmentCooldown:F1}с",
                         Foreground = new SolidColorBrush(Color.FromRgb(180, 100, 100)),
                         FontSize = 11
                     };
@@ -2710,7 +2979,7 @@ public partial class GameView : UserControl
                         {
                             var investButton = new Button
                             {
-                                Content = $"Інвестувати 100\n{GetResourceName(resourceType)}",
+                                Content = $"{services.LocalizationService.Instance["BuildingPanel_Invest"]} {GetResourceName(resourceType)}",
                                 Width = 130,
                                 Height = 50,
                                 Margin = new Thickness(0, 0, 5, 5),

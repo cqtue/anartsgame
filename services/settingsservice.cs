@@ -30,6 +30,7 @@ public class SettingsService
     public double MusicVolume { get; set; } = 100;
     public bool IsFullscreen { get; set; }
     public bool IsVsyncEnabled { get; set; } = true;
+    public string Language { get; set; } = "Українська";
 
     private SettingsService()
     {
@@ -48,7 +49,8 @@ public class SettingsService
             SoundVolume,
             MusicVolume,
             IsFullscreen,
-            IsVsyncEnabled
+            IsVsyncEnabled,
+            Language
         };
 
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
@@ -81,6 +83,9 @@ public class SettingsService
 
             if (settings.TryGetValue("IsVsyncEnabled", out var isVsyncEnabled))
                 IsVsyncEnabled = isVsyncEnabled.GetBoolean();
+
+            if (settings.TryGetValue("Language", out var language))
+                Language = language.GetString() ?? "Українська";
         }
         catch
         {
