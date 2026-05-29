@@ -9,6 +9,7 @@ public class NavigationService
 {
     private static NavigationService? _instance;
     private static readonly object _lock = new();
+    private bool _returnToGameWithPause = false;
 
     public static NavigationService Instance
     {
@@ -73,4 +74,16 @@ public class NavigationService
     public void NavigateToSettings() => NavigateTo(new SettingsView());
     public void NavigateToNewGameSetup() => NavigateTo(new NewGameSetupView());
     public void NavigateToGame() => NavigateTo(new GameView());
+
+    public void SetReturnToGameWithPause(bool value)
+    {
+        _returnToGameWithPause = value;
+    }
+
+    public bool ShouldReturnToGameWithPause()
+    {
+        bool value = _returnToGameWithPause;
+        _returnToGameWithPause = false; // Reset after reading
+        return value;
+    }
 }

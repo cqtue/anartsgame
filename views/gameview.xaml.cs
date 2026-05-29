@@ -55,10 +55,14 @@ public partial class GameView : UserControl
     private int _tradeFromAmount = 0;
     private ResourceType? _tradeToResource = null;
     private Research? _currentResearch = null;
+    private bool _isPaused = false;
+    private bool _isLoadingFromSave = false;
 
-    public GameView()
+    public GameView(bool loadFromSave = false)
     {
         InitializeComponent();
+
+        _isLoadingFromSave = loadFromSave;
 
         _scaleTransform = new ScaleTransform(1.0, 1.0);
         _translateTransform = new TranslateTransform(0, 0);
@@ -73,18 +77,21 @@ public partial class GameView : UserControl
         _gameTimer.Tick += GameTimer_Tick;
         _gameTimer.Start();
 
-        _resources[ResourceType.Metal] = 200;
-        _resources[ResourceType.Organic] = 200;
-        _resources[ResourceType.Meat] = 200;
-        _resources[ResourceType.Wood] = 100;
-        _resources[ResourceType.Coal] = 0;
+        if (!_isLoadingFromSave)
+        {
+            _resources[ResourceType.Metal] = 200;
+            _resources[ResourceType.Organic] = 200;
+            _resources[ResourceType.Meat] = 200;
+            _resources[ResourceType.Wood] = 100;
+            _resources[ResourceType.Coal] = 0;
 
-        _availableResearch.Add(new Research(ResearchType.ImprovedProduction));
-        _availableResearch.Add(new Research(ResearchType.EfficientConstruction));
-        _availableResearch.Add(new Research(ResearchType.FastLearning));
-        _availableResearch.Add(new Research(ResearchType.ExtendedRadius));
-        _availableResearch.Add(new Research(ResearchType.AdvancedMining));
-        _availableResearch.Add(new Research(ResearchType.OrganicBoost));
+            _availableResearch.Add(new Research(ResearchType.ImprovedProduction));
+            _availableResearch.Add(new Research(ResearchType.EfficientConstruction));
+            _availableResearch.Add(new Research(ResearchType.FastLearning));
+            _availableResearch.Add(new Research(ResearchType.ExtendedRadius));
+            _availableResearch.Add(new Research(ResearchType.AdvancedMining));
+            _availableResearch.Add(new Research(ResearchType.OrganicBoost));
+        }
 
         Loaded += OnLoaded;
         MouseWheel += OnMouseWheel;
@@ -96,9 +103,12 @@ public partial class GameView : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        GenerateMap();
-        RenderMap();
-        CenterCamera();
+        if (!_isLoadingFromSave)
+        {
+            GenerateMap();
+            RenderMap();
+            CenterCamera();
+        }
     }
 
     private void GenerateMap()
@@ -655,6 +665,19 @@ public partial class GameView : UserControl
 
                         canPlace = withinBuildingRadius && nearTree && !hasOverlap;
                     }
+                    else if (_selectedBuildingType == BuildingType.Market || _selectedBuildingType == BuildingType.Marketplace)
+                    {
+                        bool marketExists = _map.Buildings.Any(b => b.Type == BuildingType.Market || b.Type == BuildingType.Marketplace);
+
+                        if (marketExists)
+                        {
+                            canPlace = false;
+                        }
+                        else
+                        {
+                            canPlace = withinBuildingRadius && !hasOverlap;
+                        }
+                    }
                     else
                     {
                         canPlace = withinBuildingRadius && !hasOverlap;
@@ -837,11 +860,55 @@ public partial class GameView : UserControl
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && _isBuildMode)
+        if (e.Key == Key.Escape)
         {
-            ExitBuildMode();
-            e.Handled = true;
+            if (_currentOpenPanel != "")
+            {
+                CloseRightPanel();
+                e.Handled = true;
+            }
+            else if (_isBuildMode)
+            {
+                ExitBuildMode();
+                e.Handled = true;
+            }
+            else
+            {
+                TogglePause();
+                e.Handled = true;
+            }
         }
+    }
+
+    private void TogglePause()
+    {
+        if (_isPaused)
+        {
+            HidePauseMenu();
+        }
+        else
+        {
+            ShowPauseMenu();
+        }
+    }
+
+    private void ShowPauseMenu()
+    {
+        _isPaused = true;
+        _gameTimer.Stop();
+        PauseOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void HidePauseMenu()
+    {
+        _isPaused = false;
+        _gameTimer.Start();
+        PauseOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    public void ShowPauseMenuAfterLoad()
+    {
+        ShowPauseMenu();
     }
 
     private void OnMouseMove(object sender, MouseEventArgs e)
@@ -971,6 +1038,28 @@ public partial class GameView : UserControl
                 }
 
                 isValid = withinBuildingRadius && nearTree && !hasOverlap;
+            }
+            else if (_selectedBuildingType == BuildingType.Market || _selectedBuildingType == BuildingType.Marketplace)
+            {
+                bool marketExists = _map.Buildings.Any(b => b.Type == BuildingType.Market || b.Type == BuildingType.Marketplace);
+
+                if (marketExists)
+                {
+                    errorMessage = "Маркет може бути лише один";
+                    isValid = false;
+                }
+                else if (!withinBuildingRadius)
+                {
+                    errorMessage = "Занадто далеко від будівель";
+                }
+                else if (hasOverlap)
+                {
+                    errorMessage = "Перетинається з іншою будівлею";
+                }
+                else
+                {
+                    isValid = withinBuildingRadius && !hasOverlap;
+                }
             }
             else
             {
@@ -1518,6 +1607,11 @@ public partial class GameView : UserControl
     private void SpeedButton_Click(object sender, RoutedEventArgs e)
     {
         _gameSpeed = (_gameSpeed + 1) % 4;
+        UpdateSpeedButton();
+    }
+
+    private void UpdateSpeedButton()
+    {
         SpeedButton.Content = _gameSpeed switch
         {
             0 => "⏸",
@@ -1526,6 +1620,14 @@ public partial class GameView : UserControl
             3 => "▶▶▶",
             _ => "▶"
         };
+    }
+
+    private void UpdateBuildingsCount()
+    {
+        if (_map != null)
+        {
+            BuildingsText.Text = $" {_map.Buildings.Count}";
+        }
     }
 
     private void BuildButton_Click(object sender, RoutedEventArgs e)
@@ -1541,6 +1643,121 @@ public partial class GameView : UserControl
     private void TradeButton_Click(object sender, RoutedEventArgs e)
     {
         ToggleRightPanel("trade", "ТРЕЙДИНГ");
+    }
+
+    private void ResumeButton_Click(object sender, RoutedEventArgs e)
+    {
+        HidePauseMenu();
+    }
+
+    private void PauseSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        SaveGameState();
+        services.NavigationService.Instance.SetReturnToGameWithPause(true);
+        services.NavigationService.Instance.NavigateToSettings();
+    }
+
+    private void SaveAndExitButton_Click(object sender, RoutedEventArgs e)
+    {
+        SaveGameState();
+        services.NavigationService.Instance.NavigateToMainMenu();
+    }
+
+    private void SaveGameState()
+    {
+        if (_map == null) return;
+
+        var gameState = new GameState
+        {
+            Resources = new Dictionary<ResourceType, int>(_resources),
+            GameSpeed = _gameSpeed,
+            ElapsedTime = _elapsedTime
+        };
+
+        // Save buildings
+        foreach (var building in _map.Buildings)
+        {
+            gameState.Buildings.Add(BuildingData.FromBuilding(building));
+        }
+
+        // Save research
+        foreach (var research in _availableResearch)
+        {
+            gameState.AvailableResearch.Add(ResearchData.FromResearch(research));
+        }
+
+        foreach (var research in _completedResearch)
+        {
+            gameState.CompletedResearch.Add(ResearchData.FromResearch(research));
+        }
+
+        if (_currentResearch != null)
+        {
+            gameState.CurrentResearch = ResearchData.FromResearch(_currentResearch);
+        }
+
+        // Save map
+        gameState.Map = MapData.FromGameMap(_map);
+
+        // Save camera
+        gameState.Camera = new CameraData
+        {
+            ScaleX = _scaleTransform.ScaleX,
+            ScaleY = _scaleTransform.ScaleY,
+            TranslateX = _translateTransform.X,
+            TranslateY = _translateTransform.Y
+        };
+
+        services.SaveLoadService.Instance.SaveGame(gameState);
+    }
+
+    public void LoadGameState(GameState gameState)
+    {
+        // Restore resources
+        _resources = new Dictionary<ResourceType, int>(gameState.Resources);
+        UpdateResourceDisplay();
+
+        // Restore game speed and time
+        _gameSpeed = gameState.GameSpeed;
+        _elapsedTime = gameState.ElapsedTime;
+        UpdateSpeedButton();
+
+        // Restore map
+        _map = gameState.Map.ToGameMap();
+
+        // Restore buildings
+        foreach (var buildingData in gameState.Buildings)
+        {
+            _map.Buildings.Add(buildingData.ToBuilding());
+        }
+
+        // Restore research
+        _availableResearch.Clear();
+        foreach (var researchData in gameState.AvailableResearch)
+        {
+            _availableResearch.Add(researchData.ToResearch());
+        }
+
+        _completedResearch.Clear();
+        foreach (var researchData in gameState.CompletedResearch)
+        {
+            _completedResearch.Add(researchData.ToResearch());
+        }
+
+        if (gameState.CurrentResearch != null)
+        {
+            _currentResearch = gameState.CurrentResearch.ToResearch();
+        }
+
+        // Restore camera
+        _scaleTransform.ScaleX = gameState.Camera.ScaleX;
+        _scaleTransform.ScaleY = gameState.Camera.ScaleY;
+        _translateTransform.X = gameState.Camera.TranslateX;
+        _translateTransform.Y = gameState.Camera.TranslateY;
+
+        // Re-render everything
+        RenderMap();
+        UpdateBuildingsCount();
     }
 
     private UIElement CreateBuildPanelContent()
@@ -2306,21 +2523,19 @@ public partial class GameView : UserControl
             if (building.CanUpgrade())
             {
                 var upgradeCost = building.GetUpgradeCost();
-                var costText = "";
-                foreach (var cost in upgradeCost)
+
+                var upgradeContainer = new StackPanel
                 {
-                    if (costText.Length > 0) costText += ", ";
-                    costText += $"{GetResourceName(cost.Key)}: {cost.Value}";
-                }
+                    Margin = new Thickness(0, 0, 10, 0)
+                };
 
                 var upgradeButton = new Button
                 {
-                    Content = $"АПГРЕЙД\n{costText}",
+                    Content = "АПГРЕЙД",
                     Width = 120,
-                    Height = 60,
-                    Margin = new Thickness(0, 0, 10, 0),
+                    Height = 45,
                     Style = (Style)FindResource("GameButtonStyle"),
-                    FontSize = 10
+                    FontSize = 11
                 };
 
                 bool canAfford = true;
@@ -2340,7 +2555,27 @@ public partial class GameView : UserControl
                 }
 
                 upgradeButton.Click += (s, e) => UpgradeBuilding(building);
-                buttonsPanel.Children.Add(upgradeButton);
+                upgradeContainer.Children.Add(upgradeButton);
+
+                var costText = new TextBlock
+                {
+                    Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
+                    FontSize = 9,
+                    TextWrapping = TextWrapping.Wrap,
+                    Width = 120,
+                    TextAlignment = TextAlignment.Center,
+                    Margin = new Thickness(0, 5, 0, 0)
+                };
+
+                var costLines = new List<string>();
+                foreach (var cost in upgradeCost)
+                {
+                    costLines.Add($"{GetResourceName(cost.Key)}: {cost.Value}");
+                }
+                costText.Text = string.Join("\n", costLines);
+
+                upgradeContainer.Children.Add(costText);
+                buttonsPanel.Children.Add(upgradeContainer);
             }
 
             var deleteButton = new Button

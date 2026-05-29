@@ -20,7 +20,7 @@ public class MainMenuViewModel : BaseViewModel
 
     public MainMenuViewModel()
     {
-        HasSaveGame = false;
+        HasSaveGame = services.SaveLoadService.Instance.SaveExists();
 
         NewGameCommand = new RelayCommand(_ => StartNewGame());
         ContinueCommand = new RelayCommand(_ => ContinueGame(), _ => HasSaveGame);
@@ -35,6 +35,13 @@ public class MainMenuViewModel : BaseViewModel
 
     private void ContinueGame()
     {
+        var gameState = services.SaveLoadService.Instance.LoadGame();
+        if (gameState != null)
+        {
+            var gameView = new views.GameView(loadFromSave: true);
+            gameView.LoadGameState(gameState);
+            services.NavigationService.Instance.NavigateTo(gameView);
+        }
     }
 
     private void OpenSettings()

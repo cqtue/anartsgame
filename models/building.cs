@@ -179,12 +179,12 @@ public class Building
                 ProductionOutput[ResourceType.Meat] = 8;
                 break;
             case 4:
-                ProductionTime = 1.0;
+                ProductionTime = 2.0;
                 ProductionOutput[ResourceType.Meat] = 10;
                 break;
             case 5:
-                ProductionTime = 3.0;
-                ProductionOutput[ResourceType.Meat] = 2;
+                ProductionTime = 1.0;
+                ProductionOutput[ResourceType.Meat] = 8;
                 break;
         }
     }
@@ -220,7 +220,7 @@ public class Building
     public void InitializeFurnaceProduction(int level)
     {
         ProductionOutput.Clear();
-        switch (level)
+            switch (level)
         {
             case 1:
                 ProductionTime = 1.0;
@@ -244,7 +244,7 @@ public class Building
                 {
                     case 1:
                         cost[ResourceType.Metal] = 150;
-                        cost[ResourceType.Organic] = 25;
+                        cost[ResourceType.Organic] = 125;
                         break;
                     case 2:
                         cost[ResourceType.Metal] = 250;
@@ -269,7 +269,7 @@ public class Building
                         cost[ResourceType.Meat] = 200;
                         break;
                     case 2:
-                        cost[ResourceType.Metal] = 25;
+                        cost[ResourceType.Metal] = 125;
                         cost[ResourceType.Meat] = 400;
                         break;
                     case 3:
@@ -278,8 +278,8 @@ public class Building
                         cost[ResourceType.Wood] = 600;
                         break;
                     case 4:
-                        cost[ResourceType.Metal] = 25;
-                        cost[ResourceType.Meat] = 100;
+                        cost[ResourceType.Metal] = 625;
+                        cost[ResourceType.Meat] = 300;
                         break;
                 }
                 break;
@@ -293,7 +293,7 @@ public class Building
                     case 2:
                         cost[ResourceType.Metal] = 135;
                         cost[ResourceType.Organic] = 170;
-                        cost[ResourceType.Wood] = 50;
+                        cost[ResourceType.Wood] = 150;
                         break;
                     case 3:
                         cost[ResourceType.Metal] = 350;
@@ -301,8 +301,8 @@ public class Building
                         cost[ResourceType.Wood] = 700;
                         break;
                     case 4:
-                        cost[ResourceType.Metal] = 35;
-                        cost[ResourceType.Organic] = 100;
+                        cost[ResourceType.Metal] = 635;
+                        cost[ResourceType.Organic] = 200;
                         break;
                 }
                 break;
@@ -358,20 +358,20 @@ public class Building
         switch (type)
         {
             case BuildingType.Factory:
-                cost[ResourceType.Metal] = 50;
-                cost[ResourceType.Organic] = 25;
+                cost[ResourceType.Metal] = 250;
+                cost[ResourceType.Organic] = 125;
                 break;
             case BuildingType.Mine:
-                cost[ResourceType.Metal] = 25;
-                cost[ResourceType.Meat] = 100;
+                cost[ResourceType.Metal] = 225;
+                cost[ResourceType.Meat] = 130;
                 break;
             case BuildingType.MeatFactory:
-                cost[ResourceType.Metal] = 35;
-                cost[ResourceType.Organic] = 100;
+                cost[ResourceType.Metal] = 135;
+                cost[ResourceType.Organic] = 140;
                 break;
             case BuildingType.Sawmill:
-                cost[ResourceType.Metal] = 15;
-                cost[ResourceType.Organic] = 65;
+                cost[ResourceType.Metal] = 105;
+                cost[ResourceType.Organic] = 165;
                 break;
             case BuildingType.Market:
                 cost[ResourceType.Wood] = 600;
@@ -380,12 +380,10 @@ public class Building
             case BuildingType.Marketplace:
                 cost[ResourceType.Wood] = 1200;
                 cost[ResourceType.Metal] = 560;
-                cost[ResourceType.Organic] = 400;
                 break;
             case BuildingType.Furnace:
-                cost[ResourceType.Metal] = 50;
-                cost[ResourceType.Organic] = 300;
-                cost[ResourceType.Meat] = 800;
+                cost[ResourceType.Organic] = 500;
+                cost[ResourceType.Meat] = 300;
                 break;
         }
 
@@ -394,6 +392,6 @@ public class Building
 
     public bool CanUpgrade()
     {
-        return Type != BuildingType.Base && Type != BuildingType.Market && Type != BuildingType.Marketplace && Level < 5;
+        return Type != BuildingType.Base && Type != BuildingType.Market && Type != BuildingType.Marketplace && (Type != BuildingType.Furnace || Level < 2) && Level < 5;
     }
 }

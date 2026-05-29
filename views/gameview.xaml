@@ -81,5 +81,37 @@
                 <ContentControl x:Name="RightPanelContent"/>
             </StackPanel>
         </Grid>
+
+        <Grid x:Name="PauseOverlay" Visibility="Collapsed">
+            <Grid.Background>
+                <SolidColorBrush Color="Black" Opacity="0.8"/>
+            </Grid.Background>
+
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="300">
+                <TextBlock Text="ПАУЗА"
+                           FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
+                           FontSize="48"
+                           Foreground="#00ff00"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,60"/>
+
+                <Button x:Name="ResumeButton"
+                        Content="продовжити"
+                        Style="{StaticResource MenuButtonStyle}"
+                        Margin="0,0,0,15"
+                        Click="ResumeButton_Click"/>
+
+                <Button x:Name="PauseSettingsButton"
+                        Content="налаштування"
+                        Style="{StaticResource MenuButtonStyle}"
+                        Margin="0,0,0,15"
+                        Click="PauseSettingsButton_Click"/>
+
+                <Button x:Name="SaveAndExitButton"
+                        Content="зберегти та вийти"
+                        Style="{StaticResource MenuButtonStyle}"
+                        Click="SaveAndExitButton_Click"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>

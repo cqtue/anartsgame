@@ -128,9 +128,32 @@ public class SettingsViewModel : BaseViewModel
         {
             DialogService.Instance.ShowConfirmDialog(
                 "у вас є незбережені зміни. відхилити їх?",
-                () => NavigationService.Instance.NavigateToMainMenu(),
+                () => PerformNavigation(),
                 () => { }
             );
+        }
+        else
+        {
+            PerformNavigation();
+        }
+    }
+
+    private void PerformNavigation()
+    {
+        if (NavigationService.Instance.ShouldReturnToGameWithPause())
+        {
+            var gameState = SaveLoadService.Instance.LoadGame();
+            if (gameState != null)
+            {
+                var gameView = new views.GameView(loadFromSave: true);
+                gameView.LoadGameState(gameState);
+                gameView.ShowPauseMenuAfterLoad();
+                NavigationService.Instance.NavigateTo(gameView);
+            }
+            else
+            {
+                NavigationService.Instance.NavigateToMainMenu();
+            }
         }
         else
         {
