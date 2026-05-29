@@ -28,7 +28,7 @@
                     <TextBlock x:Name="MetalText" Text=" 0" Style="{StaticResource ResourceTextStyle}" Margin="5,0,0,0"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
-                    <TextBlock Text="●" Foreground="#50C878" FontSize="16" VerticalAlignment="Center"/>
+                    <TextBlock Text="●" Foreground="#50C878" FontSize="16" VerticalAlignment="Center" RenderTransformOrigin="0.479,0.606" Height="24"/>
                     <TextBlock x:Name="OrganicText" Text=" 0" Style="{StaticResource ResourceTextStyle}" Margin="5,0,0,0"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
@@ -49,14 +49,14 @@
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,0" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
-                    <TextBlock Text="⬢" Foreground="#E0E0E0" FontSize="16" VerticalAlignment="Center"/>
+                    <TextBlock Text="⬢" Foreground="#E0E0E0" FontSize="16" VerticalAlignment="Center" Height="24"/>
                     <TextBlock x:Name="UnitsText" Text=" 0" Style="{StaticResource ResourceTextStyle}" Margin="5,0,0,0"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
-                    <TextBlock Text="▣" Foreground="#E0E0E0" FontSize="16" VerticalAlignment="Center"/>
+                    <TextBlock Text="▣" Foreground="#E0E0E0" FontSize="16" VerticalAlignment="Center" Height="24"/>
                     <TextBlock x:Name="BuildingsText" Text=" 0" Style="{StaticResource ResourceTextStyle}" Margin="5,0,0,0"/>
                 </StackPanel>
-                <Button x:Name="SpeedButton" Content="▶" Style="{StaticResource GameButtonStyle}" Width="40" Height="40" Click="SpeedButton_Click"/>
+                <Button x:Name="SpeedButton" Content="▶" Style="{StaticResource GameButtonStyle}" Width="68" Height="40" Click="SpeedButton_Click"/>
             </StackPanel>
         </Grid>
 
@@ -65,9 +65,9 @@
                 <SolidColorBrush Color="#1a1a1a" Opacity="0.5"/>
             </Grid.Background>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Button x:Name="BuildButton" Content="🏗" Style="{StaticResource GameButtonStyle}" Width="60" Height="60" Margin="10" Click="BuildButton_Click" FontSize="24"/>
-                <Button x:Name="ResearchButton" Content="🔬" Style="{StaticResource GameButtonStyle}" Width="60" Height="60" Margin="10" Click="ResearchButton_Click" FontSize="24"/>
-                <Button x:Name="TradeButton" Content="💱" Style="{StaticResource GameButtonStyle}" Width="60" Height="60" Margin="10" Click="TradeButton_Click" FontSize="24"/>
+                <Button x:Name="BuildButton" Content="🏗" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="BuildButton_Click" FontSize="24"/>
+                <Button x:Name="ResearchButton" Content="🔬" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="ResearchButton_Click" FontSize="24"/>
+                <Button x:Name="TradeButton" Content="💱" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="TradeButton_Click" FontSize="24"/>
             </StackPanel>
         </Grid>
 

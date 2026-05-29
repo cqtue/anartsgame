@@ -14,7 +14,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="нова гра"
+        <TextBlock Text="новий світ"
                    FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                    FontSize="36"
                    Foreground="#00ff00"
@@ -24,7 +24,7 @@
         <StackPanel Grid.Row="2"
                     HorizontalAlignment="Center"
                     Margin="0,0,0,40">
-            <Button Content="почати гру"
+            <Button Content="почати"
                     Command="{Binding StartGameCommand}"
                     Style="{StaticResource MenuButtonStyle}"
                     Width="250"/>
