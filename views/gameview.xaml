@@ -77,10 +77,14 @@
                 <TranslateTransform x:Name="RightPanelTransform" X="300"/>
             </Grid.RenderTransform>
 
-            <StackPanel Margin="20">
-                <TextBlock x:Name="RightPanelTitle" Text="" Style="{StaticResource TimerTextStyle}" Margin="0,0,0,20"/>
-                <ContentControl x:Name="RightPanelContent"/>
-            </StackPanel>
+            <Grid Margin="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" x:Name="RightPanelTitle" Text="" Style="{StaticResource TimerTextStyle}" Margin="0,0,0,20"/>
+                <ContentControl Grid.Row="1" x:Name="RightPanelContent"/>
+            </Grid>
         </Grid>
 
         <Grid x:Name="PauseOverlay" Visibility="Collapsed">

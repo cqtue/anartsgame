@@ -71,6 +71,8 @@ public partial class GameView : UserControl
     {
         InitializeComponent();
 
+        services.MusicService.Instance.PlayGameTheme();
+
         _isLoadingFromSave = loadFromSave;
 
         _scaleTransform = new ScaleTransform(1.0, 1.0);
@@ -88,10 +90,10 @@ public partial class GameView : UserControl
 
         if (!_isLoadingFromSave)
         {
-            _resources[ResourceType.Metal] = 200;
-            _resources[ResourceType.Organic] = 200;
-            _resources[ResourceType.Meat] = 200;
-            _resources[ResourceType.Wood] = 100;
+            _resources[ResourceType.Metal] = 20;
+            _resources[ResourceType.Organic] = 10;
+            _resources[ResourceType.Meat] = 10;
+            _resources[ResourceType.Wood] = 20;
             _resources[ResourceType.Coal] = 0;
 
             _availableResearch.Add(new Research(ResearchType.ImprovedProduction));
@@ -133,6 +135,7 @@ public partial class GameView : UserControl
         if (_map == null) return;
 
         MapCanvas.Children.Clear();
+        _permanentRoads.Clear();
 
         for (int x = 0; x < _map.Width; x++)
         {
@@ -186,6 +189,7 @@ public partial class GameView : UserControl
                             StrokeThickness = 2
                         };
                         MapCanvas.Children.Add(road);
+                        _permanentRoads.Add(road);
                     }
                 }
             }
@@ -737,6 +741,7 @@ public partial class GameView : UserControl
                         UpdateResourceDisplay();
 
                         _map?.Buildings.Add(newBuilding);
+                        UpdateBuildingsCount();
 
                         RenderBuilding(newBuilding);
 
@@ -774,6 +779,8 @@ public partial class GameView : UserControl
                                 _permanentRoads.Add(road);
                             }
                         }
+
+                        UpdateRoadCount();
 
                         ExitBuildMode();
                     }
@@ -826,8 +833,8 @@ public partial class GameView : UserControl
             var nearestTree = FindNearestTileOfType(mapPos, TileType.Tree);
             if (nearestTree != null)
             {
-                double tilePixelX = nearestTree.X * TileSize + nearestTree.OffsetX;
-                double tilePixelY = nearestTree.Y * TileSize + nearestTree.OffsetY;
+                double tilePixelX = nearestTree.X * TileSize + nearestTree.OffsetX + TileSize / 2.0;
+                double tilePixelY = nearestTree.Y * TileSize + nearestTree.OffsetY + TileSize / 2.0;
                 double distanceToTree = Math.Sqrt(
                     Math.Pow(mapPos.X - tilePixelX, 2) +
                     Math.Pow(mapPos.Y - tilePixelY, 2)
@@ -844,8 +851,8 @@ public partial class GameView : UserControl
             var nearestRock = FindNearestTileOfType(mapPos, TileType.Rock);
             if (nearestRock != null)
             {
-                double tilePixelX = nearestRock.X * TileSize + nearestRock.OffsetX;
-                double tilePixelY = nearestRock.Y * TileSize + nearestRock.OffsetY;
+                double tilePixelX = nearestRock.X * TileSize + nearestRock.OffsetX + TileSize / 2.0;
+                double tilePixelY = nearestRock.Y * TileSize + nearestRock.OffsetY + TileSize / 2.0;
                 double distanceToRock = Math.Sqrt(
                     Math.Pow(mapPos.X - tilePixelX, 2) +
                     Math.Pow(mapPos.Y - tilePixelY, 2)
@@ -889,7 +896,7 @@ public partial class GameView : UserControl
             BuildingType.Sawmill => Color.FromRgb(139, 90, 43),
             BuildingType.Bank => Color.FromRgb(200, 180, 50),
             BuildingType.Marketplace => Color.FromRgb(220, 200, 80),
-            BuildingType.Furnace => Color.FromRgb(200, 100, 30),
+            BuildingType.Furnace => Color.FromRgb(100, 50, 20),
             _ => Color.FromRgb(128, 128, 128)
         };
 
@@ -1093,6 +1100,14 @@ public partial class GameView : UserControl
                 _resources[ResourceType.Meat] += 10000;
                 _resources[ResourceType.Wood] += 10000;
                 _resources[ResourceType.Coal] += 10000;
+                UpdateResourceDisplay();
+                break;
+            case "zeroing":
+                _resources[ResourceType.Metal] = 0;
+                _resources[ResourceType.Organic] = 0;
+                _resources[ResourceType.Meat] = 0;
+                _resources[ResourceType.Wood] = 0;
+                _resources[ResourceType.Coal] = 0;
                 UpdateResourceDisplay();
                 break;
 
@@ -1522,7 +1537,7 @@ public partial class GameView : UserControl
                         building.InvestmentProgress = 1.0;
                         building.IsInvesting = false;
 
-                        int returnAmount = (int)(building.InvestmentAmount * 1.25);
+                        int returnAmount = (int)(building.InvestmentAmount * 2.0);
                         if (!_resources.ContainsKey(building.InvestmentResource!.Value))
                         {
                             _resources[building.InvestmentResource!.Value] = 0;
@@ -1899,6 +1914,11 @@ public partial class GameView : UserControl
         }
     }
 
+    private void UpdateRoadCount()
+    {
+        UnitsText.Text = $" {_permanentRoads.Count}";
+    }
+
     private void BuildButton_Click(object sender, RoutedEventArgs e)
     {
         ToggleRightPanel("build", services.LocalizationService.Instance["Panel_Build"]);
@@ -2027,6 +2047,7 @@ public partial class GameView : UserControl
         // Re-render everything
         RenderMap();
         UpdateBuildingsCount();
+        UpdateRoadCount();
     }
 
     private UIElement CreateBuildPanelContent()
@@ -2112,7 +2133,14 @@ public partial class GameView : UserControl
         panel.Children.Add(marketplaceButton);
         panel.Children.Add(furnaceButton);
 
-        return panel;
+        var scrollViewer = new ScrollViewer
+        {
+            Content = panel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+
+        return scrollViewer;
     }
 
     private string FormatCost(Dictionary<ResourceType, int> cost)
@@ -2252,7 +2280,14 @@ public partial class GameView : UserControl
             panel.Children.Add(researchPanel);
         }
 
-        return panel;
+        var scrollViewer = new ScrollViewer
+        {
+            Content = panel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+
+        return scrollViewer;
     }
 
     private UIElement CreateTradePanelContent()
@@ -2968,7 +3003,7 @@ public partial class GameView : UserControl
                 }
                 else
                 {
-                    var investButtonsPanel = new WrapPanel
+                    var investButtonsPanel = new StackPanel
                     {
                         Margin = new Thickness(0, 5, 0, 0)
                     };
@@ -2980,9 +3015,8 @@ public partial class GameView : UserControl
                             var investButton = new Button
                             {
                                 Content = $"{services.LocalizationService.Instance["BuildingPanel_Invest"]} {GetResourceName(resourceType)}",
-                                Width = 130,
                                 Height = 50,
-                                Margin = new Thickness(0, 0, 5, 5),
+                                Margin = new Thickness(0, 0, 0, 5),
                                 Style = (Style)FindResource("GameButtonStyle"),
                                 FontSize = 10
                             };

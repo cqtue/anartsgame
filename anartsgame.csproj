@@ -12,4 +12,13 @@
     <Resource Include="styles\Watc2.TTF" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="music\*.ogg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="music\*.mp3">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

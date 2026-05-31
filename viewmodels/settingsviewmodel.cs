@@ -141,6 +141,8 @@ public class SettingsViewModel : BaseViewModel
         if (_selectedLanguageIndex != _originalSelectedLanguageIndex)
             LocalizationService.Instance.SetLanguage(AvailableLanguages[_selectedLanguageIndex]);
 
+        MusicService.Instance.UpdateVolume();
+
         _originalMasterVolume = _masterVolume;
         _originalSoundVolume = _soundVolume;
         _originalMusicVolume = _musicVolume;
