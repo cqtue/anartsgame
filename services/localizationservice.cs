@@ -30,14 +30,12 @@ public class LocalizationService : INotifyPropertyChanged
     {
         ["Українська"] = new()
         {
-            // Main Menu
             ["MainMenu_Title"] = "anarts",
             ["MainMenu_NewGame"] = "нова гра",
             ["MainMenu_Continue"] = "продовжити",
             ["MainMenu_Settings"] = "налаштування",
             ["MainMenu_Exit"] = "вихід",
 
-            // Settings
             ["Settings_Title"] = "налаштування",
             ["Settings_Language"] = "мова",
             ["Settings_MasterVolume"] = "загальна гучність",
@@ -49,21 +47,21 @@ public class LocalizationService : INotifyPropertyChanged
             ["Settings_Back"] = "назад",
             ["Settings_UnsavedChanges"] = "у вас є незбережені зміни. відхилити їх?",
 
-            // Game View - Pause Menu
             ["Game_Pause"] = "ПАУЗА",
             ["Game_Resume"] = "продовжити",
             ["Game_Settings"] = "налаштування",
             ["Game_SaveAndExit"] = "зберегти та вийти",
 
-            // New Game Setup
             ["NewGame_Title"] = "новий світ",
             ["NewGame_Start"] = "почати",
+            ["NewGame_StartingResources"] = "ПОЧАТКОВІ РЕСУРСИ",
+            ["NewGame_GameSettings"] = "НАЛАШТУВАННЯ ГРИ",
+            ["NewGame_DisableSaving"] = "вимкнути збереження гри",
+            ["NewGame_EnableConsole"] = "увімкнути консоль",
 
-            // Dialog
             ["Dialog_Yes"] = "так",
             ["Dialog_No"] = "ні",
 
-            // Game - Error Messages
             ["Game_Error_TooFar"] = "Занадто далеко від будівель",
             ["Game_Error_MineRocksFar"] = "Шахта: занадто далеко від будівель та каменів",
             ["Game_Error_MineBuildingsFar"] = "Шахта: занадто далеко від будівель",
@@ -75,20 +73,19 @@ public class LocalizationService : INotifyPropertyChanged
             ["Game_Error_BankLimit"] = "Банк може бути лише один",
             ["Game_Error_MarketLimit"] = "Маркет може бути лише один",
 
-            // Game - Resources
             ["Resource_Metal"] = "Метал",
             ["Resource_Organic"] = "Органіка",
             ["Resource_Meat"] = "М'ясо",
             ["Resource_Wood"] = "Дерево",
             ["Resource_Coal"] = "Вугілля",
+            ["Resource_Bones"] = "Кісточки",
+            ["Resource_Diamonds"] = "Діаманти",
             ["Resource_Generic"] = "Ресурс",
 
-            // Game - Panel Titles
             ["Panel_Build"] = "БУДІВНИЦТВО",
             ["Panel_Research"] = "ДОСЛІДЖЕННЯ",
             ["Panel_Trade"] = "ТРЕЙДИНГ",
 
-            // Game - Building Names
             ["Building_Base"] = "БАЗА",
             ["Building_Factory"] = "ФАБРИКА",
             ["Building_Mine"] = "ШАХТА",
@@ -97,9 +94,10 @@ public class LocalizationService : INotifyPropertyChanged
             ["Building_Bank"] = "БАНК",
             ["Building_Marketplace"] = "МАРКЕТ",
             ["Building_Furnace"] = "ПЕЧКА",
+            ["Building_Altar"] = "ВІВТАР",
+            ["Building_Crystallizer"] = "КРИСТАЛІЗАТОР",
             ["Building_Generic"] = "БУДІВЛЯ",
 
-            // Game - Building Descriptions
             ["BuildingDesc_Base"] = "Центр управління колонією",
             ["BuildingDesc_Factory"] = "Виробляє органіку",
             ["BuildingDesc_Mine"] = "Видобуває метал",
@@ -108,15 +106,15 @@ public class LocalizationService : INotifyPropertyChanged
             ["BuildingDesc_Bank"] = "Інвестує ресурси для прибутку",
             ["BuildingDesc_Marketplace"] = "Дозволяє торгувати ресурсами",
             ["BuildingDesc_Furnace"] = "Переплавляє дерево у вугілля",
+            ["BuildingDesc_Altar"] = "Перероблює вугілля, органіку та м'ясо у кісточки",
+            ["BuildingDesc_Crystallizer"] = "Перероблює вугілля, органіку та метал у діаманти",
             ["BuildingDesc_Generic"] = "Будівля",
 
-            // Game - Research Panel
             ["Research_Remaining"] = "Залишилось:",
             ["Research_Available"] = "ДОСТУПНІ ДОСЛІДЖЕННЯ:",
             ["Research_Cost"] = "Вартість:",
             ["Research_Button"] = "ДОСЛІДИТИ",
 
-            // Game - Trading Panel
             ["Trade_NeedMarket"] = "Потрібно побудувати Маркет для торгівлі",
             ["Trade_Step1"] = "Крок 1: Оберіть ресурс для обміну",
             ["Trade_Rate"] = "Курс обміну: 100% → 60%",
@@ -133,7 +131,6 @@ public class LocalizationService : INotifyPropertyChanged
             ["Trade_Has"] = "є:",
             ["Trade_WillReceive"] = "отримаєте:",
 
-            // Game - Building Panel
             ["BuildingPanel_Level"] = "Рівень:",
             ["BuildingPanel_Upgrade"] = "АПГРЕЙД",
             ["BuildingPanel_Delete"] = "ВИДАЛИТИ",
@@ -145,7 +142,16 @@ public class LocalizationService : INotifyPropertyChanged
             ["BuildingPanel_Cooldown"] = "Кулдаун:",
             ["BuildingPanel_Invest"] = "Інвестувати 100",
 
-            // Game - Research Names
+            ["BatchProduction_Amount"] = "Кількість для виробництва:",
+            ["BatchProduction_Max"] = "Максимум:",
+            ["BatchProduction_Start"] = "ПОЧАТИ ВИРОБНИЦТВО",
+            ["BatchProduction_Cancel"] = "СКАСУВАТИ",
+            ["BatchProduction_Remaining"] = "Залишилось:",
+            ["BatchProduction_CancelWarning"] = "Скасування поверне лише 50% ресурсів",
+            ["BatchProduction_Input"] = "Витрати на 1 шт:",
+            ["BatchProduction_Total"] = "Всього витрат:",
+            ["BatchProduction_Producing"] = "ВИРОБНИЦТВО:",
+
             ["Research_ImprovedProduction"] = "Покращене виробництво",
             ["Research_EfficientConstruction"] = "Ефективне будівництво",
             ["Research_FastLearning"] = "Швидке навчання",
@@ -153,7 +159,6 @@ public class LocalizationService : INotifyPropertyChanged
             ["Research_AdvancedMining"] = "Покращена видобування",
             ["Research_OrganicBoost"] = "Органічний бум",
 
-            // Game - Research Descriptions
             ["ResearchDesc_ImprovedProduction"] = "Збільшує швидкість виробництва всіх будівель на 15%",
             ["ResearchDesc_EfficientConstruction"] = "Зменшує вартість будівництва на 20%",
             ["ResearchDesc_FastLearning"] = "Зменшує час досліджень на 25%",
@@ -163,14 +168,12 @@ public class LocalizationService : INotifyPropertyChanged
         },
         ["English"] = new()
         {
-            // Main Menu
             ["MainMenu_Title"] = "anarts",
             ["MainMenu_NewGame"] = "new game",
             ["MainMenu_Continue"] = "continue",
             ["MainMenu_Settings"] = "settings",
             ["MainMenu_Exit"] = "exit",
 
-            // Settings
             ["Settings_Title"] = "settings",
             ["Settings_Language"] = "language",
             ["Settings_MasterVolume"] = "master volume",
@@ -182,46 +185,45 @@ public class LocalizationService : INotifyPropertyChanged
             ["Settings_Back"] = "back",
             ["Settings_UnsavedChanges"] = "you have unsaved changes. discard them?",
 
-            // Game View - Pause Menu
             ["Game_Pause"] = "PAUSE",
             ["Game_Resume"] = "resume",
             ["Game_Settings"] = "settings",
             ["Game_SaveAndExit"] = "save and exit",
 
-            // New Game Setup
             ["NewGame_Title"] = "new world",
             ["NewGame_Start"] = "start",
+            ["NewGame_StartingResources"] = "STARTING RESOURCES",
+            ["NewGame_GameSettings"] = "GAME SETTINGS",
+            ["NewGame_DisableSaving"] = "disable game saving",
+            ["NewGame_EnableConsole"] = "enable console",
 
-            // Dialog
             ["Dialog_Yes"] = "yes",
             ["Dialog_No"] = "no",
 
-            // Game - Error Messages
-            ["Game_Error_TooFar"] = "too far from buildings",
-            ["Game_Error_MineRocksFar"] = "mine: too far from buildings and rocks",
-            ["Game_Error_MineBuildingsFar"] = "mine: too far from buildings",
-            ["Game_Error_MineNoRocks"] = "mine: must be near rocks",
-            ["Game_Error_Overlap"] = "overlaps with another building",
-            ["Game_Error_SawmillTreesFar"] = "sawmill: too far from buildings and trees",
-            ["Game_Error_SawmillBuildingsFar"] = "sawmill: too far from buildings",
-            ["Game_Error_SawmillNoTrees"] = "sawmill: must be near trees",
-            ["Game_Error_BankLimit"] = "bank can only be one",
-            ["Game_Error_MarketLimit"] = "market can only be one",
+            ["Game_Error_TooFar"] = "Too far from buildings",
+            ["Game_Error_MineRocksFar"] = "Mine: too far from buildings and rocks",
+            ["Game_Error_MineBuildingsFar"] = "Mine: too far from buildings",
+            ["Game_Error_MineNoRocks"] = "Mine: must be near rocks",
+            ["Game_Error_Overlap"] = "Overlaps with another building",
+            ["Game_Error_SawmillTreesFar"] = "Sawmill: too far from buildings and trees",
+            ["Game_Error_SawmillBuildingsFar"] = "Sawmill: too far from buildings",
+            ["Game_Error_SawmillNoTrees"] = "Sawmill: must be near trees",
+            ["Game_Error_BankLimit"] = "Bank can only be one",
+            ["Game_Error_MarketLimit"] = "Market can only be one",
 
-            // Game - Resources
-            ["Resource_Metal"] = "metal",
-            ["Resource_Organic"] = "organic",
-            ["Resource_Meat"] = "meat",
-            ["Resource_Wood"] = "wood",
-            ["Resource_Coal"] = "coal",
-            ["Resource_Generic"] = "resource",
+            ["Resource_Metal"] = "Metal",
+            ["Resource_Organic"] = "Organic",
+            ["Resource_Meat"] = "Meat",
+            ["Resource_Wood"] = "Wood",
+            ["Resource_Coal"] = "Coal",
+            ["Resource_Bones"] = "Bones",
+            ["Resource_Diamonds"] = "Diamonds",
+            ["Resource_Generic"] = "Resource",
 
-            // Game - Panel Titles
             ["Panel_Build"] = "CONSTRUCTION",
             ["Panel_Research"] = "RESEARCH",
             ["Panel_Trade"] = "TRADING",
 
-            // Game - Building Names
             ["Building_Base"] = "BASE",
             ["Building_Factory"] = "FACTORY",
             ["Building_Mine"] = "MINE",
@@ -230,27 +232,28 @@ public class LocalizationService : INotifyPropertyChanged
             ["Building_Bank"] = "BANK",
             ["Building_Marketplace"] = "MARKET",
             ["Building_Furnace"] = "FURNACE",
+            ["Building_Altar"] = "ALTAR",
+            ["Building_Crystallizer"] = "CRYSTALLIZER",
             ["Building_Generic"] = "BUILDING",
 
-            // Game - Building Descriptions
-            ["BuildingDesc_Base"] = "colony control center",
-            ["BuildingDesc_Factory"] = "produces organic",
-            ["BuildingDesc_Mine"] = "extracts metal",
-            ["BuildingDesc_MeatFactory"] = "produces meat",
-            ["BuildingDesc_Sawmill"] = "extracts wood",
-            ["BuildingDesc_Bank"] = "invests resources for profit",
-            ["BuildingDesc_Marketplace"] = "allows trading resources",
-            ["BuildingDesc_Furnace"] = "smelts wood into coal",
-            ["BuildingDesc_Generic"] = "building",
+            ["BuildingDesc_Base"] = "Colony control center",
+            ["BuildingDesc_Factory"] = "Produces organic",
+            ["BuildingDesc_Mine"] = "Extracts metal",
+            ["BuildingDesc_MeatFactory"] = "Produces meat",
+            ["BuildingDesc_Sawmill"] = "Extracts wood",
+            ["BuildingDesc_Bank"] = "Invests resources for profit",
+            ["BuildingDesc_Marketplace"] = "Allows trading resources",
+            ["BuildingDesc_Furnace"] = "Smelts wood into coal",
+            ["BuildingDesc_Altar"] = "Converts coal, organic and meat into bones",
+            ["BuildingDesc_Crystallizer"] = "Converts coal, organic and metal into diamonds",
+            ["BuildingDesc_Generic"] = "Building",
 
-            // Game - Research Panel
             ["Research_Remaining"] = "remaining:",
             ["Research_Available"] = "AVAILABLE RESEARCH:",
             ["Research_Cost"] = "cost:",
             ["Research_Button"] = "RESEARCH",
 
-            // Game - Trading Panel
-            ["Trade_NeedMarket"] = "need to build market for trading",
+            ["Trade_NeedMarket"] = "needs to build market for trading",
             ["Trade_Step1"] = "step 1: choose resource to exchange",
             ["Trade_Rate"] = "exchange rate: 100% → 60%",
             ["Trade_Back"] = "← back",
@@ -266,7 +269,6 @@ public class LocalizationService : INotifyPropertyChanged
             ["Trade_Has"] = "has:",
             ["Trade_WillReceive"] = "will receive:",
 
-            // Game - Building Panel
             ["BuildingPanel_Level"] = "level:",
             ["BuildingPanel_Upgrade"] = "UPGRADE",
             ["BuildingPanel_Delete"] = "DELETE",
@@ -278,21 +280,29 @@ public class LocalizationService : INotifyPropertyChanged
             ["BuildingPanel_Cooldown"] = "cooldown:",
             ["BuildingPanel_Invest"] = "invest 100",
 
-            // Game - Research Names
-            ["Research_ImprovedProduction"] = "improved production",
-            ["Research_EfficientConstruction"] = "efficient construction",
-            ["Research_FastLearning"] = "fast learning",
-            ["Research_ExtendedRadius"] = "extended radius",
-            ["Research_AdvancedMining"] = "advanced mining",
-            ["Research_OrganicBoost"] = "organic boom",
+            ["BatchProduction_Amount"] = "amount to produce:",
+            ["BatchProduction_Max"] = "maximum:",
+            ["BatchProduction_Start"] = "START PRODUCTION",
+            ["BatchProduction_Cancel"] = "CANCEL",
+            ["BatchProduction_Remaining"] = "remaining:",
+            ["BatchProduction_CancelWarning"] = "cancellation will return only 50% of resources",
+            ["BatchProduction_Input"] = "cost per 1 unit:",
+            ["BatchProduction_Total"] = "total cost:",
+            ["BatchProduction_Producing"] = "PRODUCING:",
 
-            // Game - Research Descriptions
-            ["ResearchDesc_ImprovedProduction"] = "increases production speed of all buildings by 15%",
-            ["ResearchDesc_EfficientConstruction"] = "reduces construction cost by 20%",
-            ["ResearchDesc_FastLearning"] = "reduces research time by 25%",
-            ["ResearchDesc_ExtendedRadius"] = "increases construction radius by 30%",
-            ["ResearchDesc_AdvancedMining"] = "mines produce 50% more metal",
-            ["ResearchDesc_OrganicBoost"] = "factories produce 40% more organic"
+            ["Research_ImprovedProduction"] = "Improved production",
+            ["Research_EfficientConstruction"] = "Efficient construction",
+            ["Research_FastLearning"] = "Fast learning",
+            ["Research_ExtendedRadius"] = "Extended radius",
+            ["Research_AdvancedMining"] = "Advanced mining",
+            ["Research_OrganicBoost"] = "Organic boost",
+
+            ["ResearchDesc_ImprovedProduction"] = "Increases production speed of all buildings by 15%",
+            ["ResearchDesc_EfficientConstruction"] = "Reduces construction cost by 20%",
+            ["ResearchDesc_FastLearning"] = "Reduces research time by 25%",
+            ["ResearchDesc_ExtendedRadius"] = "Increases construction radius by 30%",
+            ["ResearchDesc_AdvancedMining"] = "Mines produce 50% more metal",
+            ["ResearchDesc_OrganicBoost"] = "Factories produce 40% more organic"
         }
     };
 

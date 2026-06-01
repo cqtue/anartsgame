@@ -73,7 +73,7 @@ public class NavigationService
     public void NavigateToMainMenu() => NavigateTo(new MainMenuView());
     public void NavigateToSettings() => NavigateTo(new SettingsView());
     public void NavigateToNewGameSetup() => NavigateTo(new NewGameSetupView());
-    public void NavigateToGame() => NavigateTo(new GameView());
+    public void NavigateToGame(viewmodels.GameSettings? settings = null) => NavigateTo(new GameView(false, settings));
 
     public void SetReturnToGameWithPause(bool value)
     {

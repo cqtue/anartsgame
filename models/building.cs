@@ -12,7 +12,9 @@ public enum BuildingType
     Sawmill,
     Bank,
     Marketplace,
-    Furnace
+    Furnace,
+    Altar,
+    Crystallizer
 }
 
 public enum ResourceType
@@ -21,7 +23,9 @@ public enum ResourceType
     Organic,
     Meat,
     Wood,
-    Coal
+    Coal,
+    Bones,
+    Diamonds
 }
 
 public class Building
@@ -42,6 +46,13 @@ public class Building
     public double InvestmentCooldown { get; set; }
     public bool IsInvesting { get; set; }
 
+    // Batch production fields (for Altar and Crystallizer)
+    public bool IsBatchProducing { get; set; }
+    public int BatchProductionTarget { get; set; }
+    public int BatchProductionRemaining { get; set; }
+    public ResourceType BatchProductionOutput { get; set; }
+    public Dictionary<ResourceType, int> BatchProductionInput { get; set; }
+
     public Building(BuildingType type, Point position, int level = 1)
     {
         Type = type;
@@ -49,6 +60,10 @@ public class Building
         Level = level;
         ProductionProgress = 0;
         ProductionOutput = new Dictionary<ResourceType, int>();
+        BatchProductionInput = new Dictionary<ResourceType, int>();
+        IsBatchProducing = false;
+        BatchProductionTarget = 0;
+        BatchProductionRemaining = 0;
 
         switch (type)
         {
@@ -99,6 +114,20 @@ public class Building
                 Size = 40;
                 CanProduce = true;
                 InitializeFurnaceProduction(level);
+                break;
+            case BuildingType.Altar:
+                BuildRadius = 150;
+                Size = 35;
+                CanProduce = false;
+                ProductionTime = 0;
+                InitializeAltarProduction(level);
+                break;
+            case BuildingType.Crystallizer:
+                BuildRadius = 150;
+                Size = 45;
+                CanProduce = false;
+                ProductionTime = 0;
+                InitializeCrystallizerProduction(level);
                 break;
         }
     }
@@ -233,6 +262,48 @@ public class Building
         }
     }
 
+    public void InitializeAltarProduction(int level)
+    {
+        BatchProductionInput.Clear();
+        BatchProductionOutput = ResourceType.Bones;
+
+        // Input: 10 coal + 5 organic + 1 meat → 1 bone
+        BatchProductionInput[ResourceType.Coal] = 10;
+        BatchProductionInput[ResourceType.Organic] = 5;
+        BatchProductionInput[ResourceType.Meat] = 1;
+
+        switch (level)
+        {
+            case 1:
+                ProductionTime = 1.0; // 1 bone per 1 second
+                break;
+            case 2:
+                ProductionTime = 0.5; // 1 bone per 0.5 seconds
+                break;
+            case 3:
+                ProductionTime = 0.0; // Instant conversion
+                break;
+        }
+    }
+
+    public void InitializeCrystallizerProduction(int level)
+    {
+        BatchProductionInput.Clear();
+        BatchProductionOutput = ResourceType.Diamonds;
+
+        // Input: 400 coal + 400 organic + 600 metal → 1 diamond
+        BatchProductionInput[ResourceType.Coal] = 400;
+        BatchProductionInput[ResourceType.Organic] = 400;
+        BatchProductionInput[ResourceType.Metal] = 600;
+
+        switch (level)
+        {
+            case 1:
+                ProductionTime = 2.0; // 1 diamond per 2 seconds
+                break;
+        }
+    }
+
     public Dictionary<ResourceType, int> GetUpgradeCost()
     {
         var cost = new Dictionary<ResourceType, int>();
@@ -346,6 +417,19 @@ public class Building
                         break;
                 }
                 break;
+            case BuildingType.Altar:
+                switch (Level)
+                {
+                    case 1:
+                        cost[ResourceType.Organic] = 250;
+                        cost[ResourceType.Bones] = 150;
+                        break;
+                    case 2:
+                        cost[ResourceType.Bones] = 400;
+                        cost[ResourceType.Diamonds] = 10;
+                        break;
+                }
+                break;
         }
 
         return cost;
@@ -385,6 +469,13 @@ public class Building
                 cost[ResourceType.Organic] = 500;
                 cost[ResourceType.Meat] = 300;
                 break;
+            case BuildingType.Altar:
+                cost[ResourceType.Organic] = 600;
+                cost[ResourceType.Coal] = 200;
+                break;
+            case BuildingType.Crystallizer:
+                cost[ResourceType.Metal] = 1000;
+                break;
         }
 
         return cost;
@@ -392,6 +483,20 @@ public class Building
 
     public bool CanUpgrade()
     {
-        return Type != BuildingType.Base && Type != BuildingType.Bank && Type != BuildingType.Marketplace && (Type != BuildingType.Furnace || Level < 2) && Level < 5;
+        // Buildings that cannot upgrade at all
+        if (Type == BuildingType.Base || Type == BuildingType.Bank ||
+            Type == BuildingType.Marketplace || Type == BuildingType.Crystallizer)
+            return false;
+
+        // Furnace can only upgrade to level 2
+        if (Type == BuildingType.Furnace && Level >= 2)
+            return false;
+
+        // Altar can only upgrade to level 3
+        if (Type == BuildingType.Altar && Level >= 3)
+            return false;
+
+        // All other buildings can upgrade up to level 5
+        return Level < 5;
     }
 }

@@ -29,6 +29,13 @@ public class BuildingData
     public double InvestmentCooldown { get; set; }
     public bool IsInvesting { get; set; }
 
+    // Batch production fields
+    public bool IsBatchProducing { get; set; }
+    public int BatchProductionTarget { get; set; }
+    public int BatchProductionRemaining { get; set; }
+    public ResourceType BatchProductionOutput { get; set; }
+    public Dictionary<ResourceType, int> BatchProductionInput { get; set; } = new();
+
     public static BuildingData FromBuilding(Building building)
     {
         return new BuildingData
@@ -42,7 +49,12 @@ public class BuildingData
             InvestmentAmount = building.InvestmentAmount,
             InvestmentProgress = building.InvestmentProgress,
             InvestmentCooldown = building.InvestmentCooldown,
-            IsInvesting = building.IsInvesting
+            IsInvesting = building.IsInvesting,
+            IsBatchProducing = building.IsBatchProducing,
+            BatchProductionTarget = building.BatchProductionTarget,
+            BatchProductionRemaining = building.BatchProductionRemaining,
+            BatchProductionOutput = building.BatchProductionOutput,
+            BatchProductionInput = new Dictionary<ResourceType, int>(building.BatchProductionInput)
         };
     }
 
@@ -55,6 +67,11 @@ public class BuildingData
         building.InvestmentProgress = InvestmentProgress;
         building.InvestmentCooldown = InvestmentCooldown;
         building.IsInvesting = IsInvesting;
+        building.IsBatchProducing = IsBatchProducing;
+        building.BatchProductionTarget = BatchProductionTarget;
+        building.BatchProductionRemaining = BatchProductionRemaining;
+        building.BatchProductionOutput = BatchProductionOutput;
+        building.BatchProductionInput = new Dictionary<ResourceType, int>(BatchProductionInput);
         return building;
     }
 }

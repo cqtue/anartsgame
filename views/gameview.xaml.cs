@@ -40,6 +40,7 @@ public partial class GameView : UserControl
     private List<Ellipse> _buildRadiusCircles = new();
     private TextBlock? _buildErrorTooltip;
     private List<Line> _permanentRoads = new();
+    private List<UIElement> _roadAnimations = new();
 
     private Building? _selectedBuilding = null;
     private bool _deleteConfirmationState = false;
@@ -58,6 +59,8 @@ public partial class GameView : UserControl
     private bool _isPaused = false;
     private bool _isLoadingFromSave = false;
     private bool _infiniteBuildDistance = false;
+    private bool _disableSaving = false;
+    private bool _enableConsole = false;
 
     // Manual gathering state
     private bool _isGathering = false;
@@ -67,13 +70,23 @@ public partial class GameView : UserControl
     private ResourceType _gatheringResourceType;
     private Border? _gatheringProgressContainer = null;
 
-    public GameView(bool loadFromSave = false)
+    // UI update throttling for building panel
+    private int _buildingPanelUpdateCounter = 0;
+    private const int BuildingPanelUpdateInterval = 5; // Update every 5 ticks (500ms)
+
+    public GameView(bool loadFromSave = false, viewmodels.GameSettings? settings = null)
     {
         InitializeComponent();
 
         services.MusicService.Instance.PlayGameTheme();
 
         _isLoadingFromSave = loadFromSave;
+
+        if (settings != null)
+        {
+            _disableSaving = settings.DisableSaving;
+            _enableConsole = settings.EnableConsole;
+        }
 
         _scaleTransform = new ScaleTransform(1.0, 1.0);
         _translateTransform = new TranslateTransform(0, 0);
@@ -90,11 +103,22 @@ public partial class GameView : UserControl
 
         if (!_isLoadingFromSave)
         {
-            _resources[ResourceType.Metal] = 20;
-            _resources[ResourceType.Organic] = 10;
-            _resources[ResourceType.Meat] = 10;
-            _resources[ResourceType.Wood] = 20;
-            _resources[ResourceType.Coal] = 0;
+            if (settings != null)
+            {
+                _resources[ResourceType.Metal] = settings.MetalAmount;
+                _resources[ResourceType.Organic] = settings.OrganicAmount;
+                _resources[ResourceType.Meat] = settings.MeatAmount;
+                _resources[ResourceType.Wood] = settings.WoodAmount;
+                _resources[ResourceType.Coal] = 0;
+            }
+            else
+            {
+                _resources[ResourceType.Metal] = 20;
+                _resources[ResourceType.Organic] = 10;
+                _resources[ResourceType.Meat] = 10;
+                _resources[ResourceType.Wood] = 20;
+                _resources[ResourceType.Coal] = 0;
+            }
 
             _availableResearch.Add(new Research(ResearchType.ImprovedProduction));
             _availableResearch.Add(new Research(ResearchType.EfficientConstruction));
@@ -104,12 +128,16 @@ public partial class GameView : UserControl
             _availableResearch.Add(new Research(ResearchType.OrganicBoost));
         }
 
+        DebugConsole.Visibility = _enableConsole ? Visibility.Visible : Visibility.Collapsed;
+
         Loaded += OnLoaded;
         MouseWheel += OnMouseWheel;
         MouseDown += OnMouseDown;
         MouseUp += OnMouseUp;
         MouseMove += OnMouseMove;
         KeyDown += OnKeyDown;
+        LostFocus += OnLostFocus;
+        LostMouseCapture += OnLostMouseCapture;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -161,6 +189,7 @@ public partial class GameView : UserControl
         }
 
         CreateRoadsBetweenBuildings();
+        CreateRoadAnimations();
     }
 
     private void CreateRoadsBetweenBuildings()
@@ -194,6 +223,173 @@ public partial class GameView : UserControl
                 }
             }
         }
+    }
+
+    private void CreateRoadAnimations()
+    {
+        // Clear old animations
+        foreach (var animation in _roadAnimations)
+        {
+            MapCanvas.Children.Remove(animation);
+        }
+        _roadAnimations.Clear();
+
+        if (_map == null) return;
+
+        // Create animations for each road
+        foreach (var road in _permanentRoads)
+        {
+            // Find buildings at both ends of the road
+            var building1 = FindBuildingAtPosition(new Point(road.X1, road.Y1));
+            var building2 = FindBuildingAtPosition(new Point(road.X2, road.Y2));
+
+            if (building1 != null && building2 != null)
+            {
+                CreateRoadAnimation(road, building1, building2);
+            }
+        }
+    }
+
+    private Building? FindBuildingAtPosition(Point position)
+    {
+        if (_map == null) return null;
+
+        foreach (var building in _map.Buildings)
+        {
+            double distance = Math.Sqrt(
+                Math.Pow(building.Position.X - position.X, 2) +
+                Math.Pow(building.Position.Y - position.Y, 2)
+            );
+
+            if (distance < 5) // Very close to building center
+            {
+                return building;
+            }
+        }
+
+        return null;
+    }
+
+    private void CreateRoadAnimation(Line road, Building building1, Building building2)
+    {
+        // Skip if either building is Bank or Market
+        if (building1.Type == BuildingType.Bank || building1.Type == BuildingType.Marketplace ||
+            building2.Type == BuildingType.Bank || building2.Type == BuildingType.Marketplace)
+        {
+            return;
+        }
+
+        // Determine which building produces resources and what type
+        Building? producingBuilding = null;
+        ResourceType? resourceType = null;
+        Building? targetBuilding = null;
+
+        // Check building1
+        var resource1 = GetBuildingResourceType(building1);
+        if (resource1.HasValue)
+        {
+            producingBuilding = building1;
+            resourceType = resource1;
+            targetBuilding = building2;
+        }
+
+        // Check building2 if building1 doesn't produce
+        if (!resourceType.HasValue)
+        {
+            var resource2 = GetBuildingResourceType(building2);
+            if (resource2.HasValue)
+            {
+                producingBuilding = building2;
+                resourceType = resource2;
+                targetBuilding = building1;
+            }
+        }
+
+        // If neither building produces resources, skip
+        if (!resourceType.HasValue || producingBuilding == null || targetBuilding == null)
+        {
+            return;
+        }
+
+        // Get resource color
+        Color color = GetResourceColor(resourceType.Value);
+
+        // Create 1-2 animated elements
+        int animCount = _random.Next(1, 3);
+        for (int i = 0; i < animCount; i++)
+        {
+            CreateSingleRoadAnimation(producingBuilding, targetBuilding, color, i);
+        }
+    }
+
+    private ResourceType? GetBuildingResourceType(Building building)
+    {
+        return building.Type switch
+        {
+            BuildingType.Factory => ResourceType.Organic,
+            BuildingType.Mine => ResourceType.Metal,
+            BuildingType.MeatFactory => ResourceType.Meat,
+            BuildingType.Sawmill => ResourceType.Wood,
+            BuildingType.Furnace => ResourceType.Coal,
+            _ => null
+        };
+    }
+
+    private Color GetResourceColor(ResourceType resourceType)
+    {
+        return resourceType switch
+        {
+            ResourceType.Metal => Color.FromRgb(74, 144, 226),    // Blue
+            ResourceType.Organic => Color.FromRgb(80, 200, 120),  // Green
+            ResourceType.Meat => Color.FromRgb(231, 76, 60),      // Red
+            ResourceType.Wood => Color.FromRgb(139, 69, 19),      // Brown
+            ResourceType.Coal => Color.FromRgb(44, 44, 44),       // Dark gray
+            _ => Color.FromRgb(200, 200, 200)                     // Default gray
+        };
+    }
+
+    private void CreateSingleRoadAnimation(Building fromBuilding, Building toBuilding, Color color, int index)
+    {
+        // Create smaller animated element (5px instead of 8px)
+        var animatedElement = new Ellipse
+        {
+            Width = 5,
+            Height = 5,
+            Fill = new SolidColorBrush(color),
+            Opacity = 0.9
+        };
+
+        // Set initial position at producing building
+        Canvas.SetLeft(animatedElement, fromBuilding.Position.X - 2.5);
+        Canvas.SetTop(animatedElement, fromBuilding.Position.Y - 2.5);
+
+        MapCanvas.Children.Add(animatedElement);
+        _roadAnimations.Add(animatedElement);
+
+        // Create animations from producing building to target building
+        double duration = 2.5 + _random.NextDouble() * 1.5; // 2.5-4 seconds
+        double delay = _random.NextDouble() * duration + (index * 0.5); // Staggered start
+
+        var animX = new DoubleAnimation
+        {
+            From = fromBuilding.Position.X - 2.5,
+            To = toBuilding.Position.X - 2.5,
+            Duration = TimeSpan.FromSeconds(duration),
+            RepeatBehavior = RepeatBehavior.Forever,
+            BeginTime = TimeSpan.FromSeconds(delay)
+        };
+
+        var animY = new DoubleAnimation
+        {
+            From = fromBuilding.Position.Y - 2.5,
+            To = toBuilding.Position.Y - 2.5,
+            Duration = TimeSpan.FromSeconds(duration),
+            RepeatBehavior = RepeatBehavior.Forever,
+            BeginTime = TimeSpan.FromSeconds(delay)
+        };
+
+        animatedElement.BeginAnimation(Canvas.LeftProperty, animX);
+        animatedElement.BeginAnimation(Canvas.TopProperty, animY);
     }
 
     private UIElement CreateTileVisual(Tile tile)
@@ -781,6 +977,7 @@ public partial class GameView : UserControl
                         }
 
                         UpdateRoadCount();
+                        CreateRoadAnimations();
 
                         ExitBuildMode();
                     }
@@ -897,6 +1094,8 @@ public partial class GameView : UserControl
             BuildingType.Bank => Color.FromRgb(200, 180, 50),
             BuildingType.Marketplace => Color.FromRgb(220, 200, 80),
             BuildingType.Furnace => Color.FromRgb(100, 50, 20),
+            BuildingType.Altar => Color.FromRgb(200, 50, 50),
+            BuildingType.Crystallizer => Color.FromRgb(30, 60, 120),
             _ => Color.FromRgb(128, 128, 128)
         };
 
@@ -955,8 +1154,29 @@ public partial class GameView : UserControl
         }
     }
 
+    private void OnLostFocus(object sender, RoutedEventArgs e)
+    {
+        // Stop gathering when window loses focus (e.g., Alt+Tab)
+        if (_isGathering)
+        {
+            StopGathering();
+        }
+    }
+
+    private void OnLostMouseCapture(object sender, MouseEventArgs e)
+    {
+        // Stop gathering when mouse capture is lost
+        if (_isGathering)
+        {
+            StopGathering();
+        }
+    }
+
     private void StartGathering(Tile target, ResourceType resourceType, double duration, Point screenPos)
     {
+        // Clean up any existing gathering progress bar first
+        StopGathering();
+
         _isGathering = true;
         _gatheringTarget = target;
         _gatheringProgress = 0;
@@ -1489,6 +1709,15 @@ public partial class GameView : UserControl
             UpdateResearch(deltaTime);
             UpdateInvestment(deltaTime);
             UpdateGathering(deltaTime);
+            UpdateBatchProduction(deltaTime);
+
+            // Periodically refresh building panel to update upgrade button states
+            _buildingPanelUpdateCounter++;
+            if (_buildingPanelUpdateCounter >= BuildingPanelUpdateInterval)
+            {
+                _buildingPanelUpdateCounter = 0;
+                RefreshBuildingPanelIfOpen();
+            }
         }
     }
 
@@ -1602,6 +1831,22 @@ public partial class GameView : UserControl
             UpdateResourceDisplay();
 
             _gatheringProgress = 0;
+        }
+    }
+
+    private void RefreshBuildingPanelIfOpen()
+    {
+        // Refresh building panel to update upgrade button states when resources change
+        if (_currentOpenPanel == "buildingInfo" && _selectedBuilding != null)
+        {
+            // Don't refresh for Altar/Crystallizer when NOT producing (to avoid resetting slider)
+            if ((_selectedBuilding.Type == BuildingType.Altar || _selectedBuilding.Type == BuildingType.Crystallizer)
+                && !_selectedBuilding.IsBatchProducing)
+            {
+                return;
+            }
+
+            RightPanelContent.Content = CreateBuildingInfoPanelContent(_selectedBuilding);
         }
     }
 
@@ -1734,6 +1979,14 @@ public partial class GameView : UserControl
         MeatText.Text = _resources.ContainsKey(ResourceType.Meat) ? _resources[ResourceType.Meat].ToString() : "0";
         WoodText.Text = _resources.ContainsKey(ResourceType.Wood) ? _resources[ResourceType.Wood].ToString() : "0";
         CoalText.Text = _resources.ContainsKey(ResourceType.Coal) ? _resources[ResourceType.Coal].ToString() : "0";
+        BonesText.Text = _resources.ContainsKey(ResourceType.Bones) ? _resources[ResourceType.Bones].ToString() : "0";
+        DiamondsText.Text = _resources.ContainsKey(ResourceType.Diamonds) ? _resources[ResourceType.Diamonds].ToString() : "0";
+
+        // Show diamonds panel only when player has obtained at least one diamond
+        if (_resources.ContainsKey(ResourceType.Diamonds) && _resources[ResourceType.Diamonds] > 0)
+        {
+            DiamondsPanel.Visibility = Visibility.Visible;
+        }
     }
 
     private void ShowProductionEffect(Building building)
@@ -1780,6 +2033,8 @@ public partial class GameView : UserControl
             ResourceType.Meat => services.LocalizationService.Instance["Resource_Meat"],
             ResourceType.Wood => services.LocalizationService.Instance["Resource_Wood"],
             ResourceType.Coal => services.LocalizationService.Instance["Resource_Coal"],
+            ResourceType.Bones => services.LocalizationService.Instance["Resource_Bones"],
+            ResourceType.Diamonds => services.LocalizationService.Instance["Resource_Diamonds"],
             _ => services.LocalizationService.Instance["Resource_Generic"]
         };
     }
@@ -1955,6 +2210,7 @@ public partial class GameView : UserControl
     private void SaveGameState()
     {
         if (_map == null) return;
+        if (_disableSaving) return;
 
         var gameState = new GameState
         {
@@ -2125,6 +2381,26 @@ public partial class GameView : UserControl
         };
         furnaceButton.Click += (s, e) => StartBuildMode(BuildingType.Furnace);
 
+        var altarCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Altar), costMultiplier);
+        var altarButton = new Button
+        {
+            Content = $"{services.LocalizationService.Instance["Building_Altar"]}\n{FormatCost(altarCost)}",
+            Height = 70,
+            Margin = new Thickness(0, 0, 0, 10),
+            Style = (Style)FindResource("GameButtonStyle")
+        };
+        altarButton.Click += (s, e) => StartBuildMode(BuildingType.Altar);
+
+        var crystallizerCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Crystallizer), costMultiplier);
+        var crystallizerButton = new Button
+        {
+            Content = $"{services.LocalizationService.Instance["Building_Crystallizer"]}\n{FormatCost(crystallizerCost)}",
+            Height = 70,
+            Margin = new Thickness(0, 0, 0, 10),
+            Style = (Style)FindResource("GameButtonStyle")
+        };
+        crystallizerButton.Click += (s, e) => StartBuildMode(BuildingType.Crystallizer);
+
         panel.Children.Add(factoryButton);
         panel.Children.Add(mineButton);
         panel.Children.Add(meatFactoryButton);
@@ -2132,6 +2408,8 @@ public partial class GameView : UserControl
         panel.Children.Add(bankButton);
         panel.Children.Add(marketplaceButton);
         panel.Children.Add(furnaceButton);
+        panel.Children.Add(altarButton);
+        panel.Children.Add(crystallizerButton);
 
         var scrollViewer = new ScrollViewer
         {
@@ -2335,6 +2613,10 @@ public partial class GameView : UserControl
 
             foreach (ResourceType resource in Enum.GetValues(typeof(ResourceType)))
             {
+                // Exclude diamonds from market trading
+                if (resource == ResourceType.Diamonds)
+                    continue;
+
                 if (!_resources.ContainsKey(resource) || _resources[resource] <= 100)
                     continue;
 
@@ -2530,6 +2812,10 @@ public partial class GameView : UserControl
             {
                 foreach (ResourceType resource in Enum.GetValues(typeof(ResourceType)))
                 {
+                    // Exclude diamonds from market trading (receive side)
+                    if (resource == ResourceType.Diamonds)
+                        continue;
+
                     if (resource == _tradeFromResource.Value)
                         continue;
 
@@ -2767,6 +3053,8 @@ public partial class GameView : UserControl
             BuildingType.Bank => services.LocalizationService.Instance["Building_Bank"],
             BuildingType.Marketplace => services.LocalizationService.Instance["Building_Marketplace"],
             BuildingType.Furnace => services.LocalizationService.Instance["Building_Furnace"],
+            BuildingType.Altar => services.LocalizationService.Instance["Building_Altar"],
+            BuildingType.Crystallizer => services.LocalizationService.Instance["Building_Crystallizer"],
             _ => services.LocalizationService.Instance["Building_Generic"]
         };
 
@@ -2790,6 +3078,8 @@ public partial class GameView : UserControl
             BuildingType.Bank => services.LocalizationService.Instance["BuildingDesc_Bank"],
             BuildingType.Marketplace => services.LocalizationService.Instance["BuildingDesc_Marketplace"],
             BuildingType.Furnace => services.LocalizationService.Instance["BuildingDesc_Furnace"],
+            BuildingType.Altar => services.LocalizationService.Instance["BuildingDesc_Altar"],
+            BuildingType.Crystallizer => services.LocalizationService.Instance["BuildingDesc_Crystallizer"],
             _ => services.LocalizationService.Instance["BuildingDesc_Generic"]
         };
 
@@ -2814,6 +3104,158 @@ public partial class GameView : UserControl
                 Margin = new Thickness(0, 0, 0, 10)
             };
             panel.Children.Add(levelText);
+
+            // Batch production UI for Altar and Crystallizer
+            if (building.Type == BuildingType.Altar || building.Type == BuildingType.Crystallizer)
+            {
+                if (building.IsBatchProducing)
+                {
+                    // Show production progress
+                    var producingLabel = new TextBlock
+                    {
+                        Text = services.LocalizationService.Instance["BatchProduction_Producing"],
+                        Foreground = new SolidColorBrush(Color.FromRgb(100, 200, 255)),
+                        FontSize = 14,
+                        FontWeight = FontWeights.Bold,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Margin = new Thickness(0, 10, 0, 10)
+                    };
+                    panel.Children.Add(producingLabel);
+
+                    var remainingText = new TextBlock
+                    {
+                        Text = $"{services.LocalizationService.Instance["BatchProduction_Remaining"]} {building.BatchProductionRemaining}",
+                        Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+                        FontSize = 16,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Margin = new Thickness(0, 0, 0, 10)
+                    };
+                    panel.Children.Add(remainingText);
+
+                    var progressBar = new System.Windows.Controls.ProgressBar
+                    {
+                        Height = 15,
+                        Background = new SolidColorBrush(Color.FromRgb(40, 40, 40)),
+                        Foreground = new SolidColorBrush(Color.FromRgb(100, 200, 255)),
+                        Value = building.ProductionProgress * 100,
+                        Maximum = 100,
+                        Margin = new Thickness(0, 0, 0, 20)
+                    };
+                    panel.Children.Add(progressBar);
+
+                    var cancelButton = new Button
+                    {
+                        Content = services.LocalizationService.Instance["BatchProduction_Cancel"],
+                        Width = 200,
+                        Height = 45,
+                        Style = (Style)FindResource("GameButtonStyle"),
+                        Margin = new Thickness(0, 0, 0, 10)
+                    };
+                    cancelButton.Click += (s, e) => CancelBatchProduction(building);
+                    panel.Children.Add(cancelButton);
+
+                    var warningText = new TextBlock
+                    {
+                        Text = services.LocalizationService.Instance["BatchProduction_CancelWarning"],
+                        Foreground = new SolidColorBrush(Color.FromRgb(255, 150, 100)),
+                        FontSize = 11,
+                        TextWrapping = TextWrapping.Wrap,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Margin = new Thickness(0, 0, 0, 20)
+                    };
+                    panel.Children.Add(warningText);
+                }
+                else
+                {
+                    // Show batch production setup
+                    int maxAmount = CalculateMaxBatchProduction(building);
+
+                    var amountLabel = new TextBlock
+                    {
+                        Text = services.LocalizationService.Instance["BatchProduction_Amount"],
+                        Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+                        FontSize = 14,
+                        Margin = new Thickness(0, 10, 0, 5)
+                    };
+                    panel.Children.Add(amountLabel);
+
+                    var slider = new Slider
+                    {
+                        Minimum = 0,
+                        Maximum = maxAmount,
+                        Value = Math.Min(1, maxAmount),
+                        TickFrequency = 1,
+                        IsSnapToTickEnabled = true,
+                        Margin = new Thickness(0, 0, 0, 5)
+                    };
+
+                    var amountText = new TextBlock
+                    {
+                        Text = $"{(int)slider.Value} / {maxAmount}",
+                        Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
+                        FontSize = 12,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Margin = new Thickness(0, 0, 0, 10)
+                    };
+                    panel.Children.Add(amountText);
+
+                    slider.ValueChanged += (s, e) =>
+                    {
+                        amountText.Text = $"{(int)slider.Value} / {maxAmount}";
+                    };
+
+                    panel.Children.Add(slider);
+
+                    // Show cost per unit
+                    var costPerUnitLabel = new TextBlock
+                    {
+                        Text = services.LocalizationService.Instance["BatchProduction_Input"],
+                        Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
+                        FontSize = 12,
+                        Margin = new Thickness(0, 0, 0, 5)
+                    };
+                    panel.Children.Add(costPerUnitLabel);
+
+                    var costPerUnitText = new TextBlock
+                    {
+                        Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
+                        FontSize = 11,
+                        Margin = new Thickness(0, 0, 0, 10)
+                    };
+                    var costLines = new List<string>();
+                    foreach (var input in building.BatchProductionInput)
+                    {
+                        costLines.Add($"{GetResourceName(input.Key)}: {input.Value}");
+                    }
+                    costPerUnitText.Text = string.Join(", ", costLines);
+                    panel.Children.Add(costPerUnitText);
+
+                    var startButton = new Button
+                    {
+                        Content = services.LocalizationService.Instance["BatchProduction_Start"],
+                        Width = 200,
+                        Height = 45,
+                        Style = (Style)FindResource("GameButtonStyle"),
+                        Margin = new Thickness(0, 10, 0, 20)
+                    };
+                    startButton.Click += (s, e) =>
+                    {
+                        int amount = (int)slider.Value;
+                        if (amount > 0)
+                        {
+                            StartBatchProduction(building, amount);
+                        }
+                    };
+
+                    if (maxAmount == 0)
+                    {
+                        startButton.IsEnabled = false;
+                        startButton.Opacity = 0.5;
+                    }
+
+                    panel.Children.Add(startButton);
+                }
+            }
 
             var buttonsPanel = new StackPanel
             {
@@ -2884,10 +3326,15 @@ public partial class GameView : UserControl
 
             var deleteButton = new Button
             {
-                Content = services.LocalizationService.Instance["BuildingPanel_Delete"],
+                Content = _deleteConfirmationState
+                    ? services.LocalizationService.Instance["BuildingPanel_Sure"]
+                    : services.LocalizationService.Instance["BuildingPanel_Delete"],
                 Width = 120,
                 Height = 45,
-                Style = (Style)FindResource("GameButtonStyle")
+                Style = (Style)FindResource("GameButtonStyle"),
+                Foreground = _deleteConfirmationState
+                    ? new SolidColorBrush(Color.FromRgb(255, 100, 100))
+                    : Brushes.White
             };
             deleteButton.Click += (s, e) =>
             {
@@ -3010,6 +3457,10 @@ public partial class GameView : UserControl
 
                     foreach (ResourceType resourceType in Enum.GetValues(typeof(ResourceType)))
                     {
+                        // Exclude diamonds from bank investment
+                        if (resourceType == ResourceType.Diamonds)
+                            continue;
+
                         if (_resources.ContainsKey(resourceType) && _resources[resourceType] > 100)
                         {
                             var investButton = new Button
@@ -3080,6 +3531,149 @@ public partial class GameView : UserControl
         _selectedBuilding = null;
         _deleteConfirmationState = false;
         CloseRightPanel();
+    }
+
+    private int CalculateMaxBatchProduction(Building building)
+    {
+        if (building.BatchProductionInput.Count == 0)
+            return 0;
+
+        int maxAmount = int.MaxValue;
+        foreach (var input in building.BatchProductionInput)
+        {
+            int available = _resources.ContainsKey(input.Key) ? _resources[input.Key] : 0;
+            int possibleAmount = available / input.Value;
+            maxAmount = Math.Min(maxAmount, possibleAmount);
+        }
+
+        return maxAmount;
+    }
+
+    private void StartBatchProduction(Building building, int amount)
+    {
+        if (amount <= 0 || building.IsBatchProducing)
+            return;
+
+        // Check if player has enough resources
+        foreach (var input in building.BatchProductionInput)
+        {
+            int totalNeeded = input.Value * amount;
+            if (!_resources.ContainsKey(input.Key) || _resources[input.Key] < totalNeeded)
+                return;
+        }
+
+        // Deduct resources
+        foreach (var input in building.BatchProductionInput)
+        {
+            int totalNeeded = input.Value * amount;
+            _resources[input.Key] -= totalNeeded;
+        }
+
+        // Start production
+        building.IsBatchProducing = true;
+        building.BatchProductionTarget = amount;
+        building.BatchProductionRemaining = amount;
+        building.ProductionProgress = 0;
+
+        UpdateResourceDisplay();
+
+        if (_selectedBuilding == building)
+        {
+            RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+        }
+    }
+
+    private void CancelBatchProduction(Building building)
+    {
+        if (!building.IsBatchProducing)
+            return;
+
+        // Return 50% of remaining resources
+        int remainingItems = building.BatchProductionRemaining;
+        foreach (var input in building.BatchProductionInput)
+        {
+            int totalRemaining = input.Value * remainingItems;
+            int refundAmount = totalRemaining / 2;
+
+            if (!_resources.ContainsKey(input.Key))
+                _resources[input.Key] = 0;
+
+            _resources[input.Key] += refundAmount;
+        }
+
+        // Stop production
+        building.IsBatchProducing = false;
+        building.BatchProductionTarget = 0;
+        building.BatchProductionRemaining = 0;
+        building.ProductionProgress = 0;
+
+        UpdateResourceDisplay();
+
+        if (_selectedBuilding == building)
+        {
+            RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+        }
+    }
+
+    private void UpdateBatchProduction(double deltaTime)
+    {
+        if (_map == null) return;
+
+        foreach (var building in _map.Buildings)
+        {
+            if (!building.IsBatchProducing || building.BatchProductionRemaining <= 0)
+                continue;
+
+            // Instant production for Altar level 3
+            if (building.Type == BuildingType.Altar && building.Level == 3)
+            {
+                // Produce all remaining items instantly
+                int produced = building.BatchProductionRemaining;
+                if (!_resources.ContainsKey(building.BatchProductionOutput))
+                    _resources[building.BatchProductionOutput] = 0;
+
+                _resources[building.BatchProductionOutput] += produced;
+                building.BatchProductionRemaining = 0;
+                building.IsBatchProducing = false;
+                building.ProductionProgress = 0;
+
+                UpdateResourceDisplay();
+
+                if (_selectedBuilding == building)
+                {
+                    RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+                }
+                continue;
+            }
+
+            // Normal production with progress
+            building.ProductionProgress += deltaTime / building.ProductionTime;
+
+            if (building.ProductionProgress >= 1.0)
+            {
+                // Produce one item
+                if (!_resources.ContainsKey(building.BatchProductionOutput))
+                    _resources[building.BatchProductionOutput] = 0;
+
+                _resources[building.BatchProductionOutput] += 1;
+                building.BatchProductionRemaining -= 1;
+                building.ProductionProgress = 0;
+
+                UpdateResourceDisplay();
+
+                // Check if production is complete
+                if (building.BatchProductionRemaining <= 0)
+                {
+                    building.IsBatchProducing = false;
+                    building.BatchProductionTarget = 0;
+                }
+
+                if (_selectedBuilding == building)
+                {
+                    RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+                }
+            }
+        }
     }
 
     private void ToggleRightPanel(string panelType, string title)
