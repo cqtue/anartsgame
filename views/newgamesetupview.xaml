@@ -35,9 +35,10 @@
                 <StackPanel Margin="0,0,0,15">
                     <Grid>
                         <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Resource_Metal]}"
+                                   FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                                    Foreground="#4A90E2"
-                                   FontSize="14"
-                                   HorizontalAlignment="Left"/>
+                                   FontSize="18"
+                                   HorizontalAlignment="Left" Margin="10,0,0,0"/>
                         <TextBlock Text="{Binding MetalAmount}"
                                    Foreground="#4A90E2"
                                    FontSize="14"
@@ -52,9 +53,10 @@
                 <StackPanel Margin="0,0,0,15">
                     <Grid>
                         <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Resource_Organic]}"
+                                   FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                                    Foreground="#50C878"
-                                   FontSize="14"
-                                   HorizontalAlignment="Left"/>
+                                   FontSize="18"
+                                   HorizontalAlignment="Left" Margin="10,0,0,0"/>
                         <TextBlock Text="{Binding OrganicAmount}"
                                    Foreground="#50C878"
                                    FontSize="14"
@@ -68,9 +70,10 @@
                 <StackPanel Margin="0,0,0,15">
                     <Grid>
                         <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Resource_Meat]}"
+                                   FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
                                    Foreground="#E74C3C"
-                                   FontSize="14"
-                                   HorizontalAlignment="Left"/>
+                                   FontSize="18"
+                                   HorizontalAlignment="Left" Margin="10,0,0,0"/>
                         <TextBlock Text="{Binding MeatAmount}"
                                    Foreground="#E74C3C"
                                    FontSize="14"
@@ -85,8 +88,9 @@
                     <Grid>
                         <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[Resource_Wood]}"
                                    Foreground="#8B4513"
-                                   FontSize="14"
-                                   HorizontalAlignment="Left"/>
+                                   FontSize="18"
+                                   FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"
+                                   HorizontalAlignment="Left" Margin="10,0,0,0"/>
                         <TextBlock Text="{Binding WoodAmount}"
                                    Foreground="#8B4513"
                                    FontSize="14"
@@ -106,16 +110,15 @@
 
                 <CheckBox IsChecked="{Binding DisableSaving}"
                           Foreground="#E0E0E0"
-                          FontSize="14"
+                          FontSize="18"
                           Margin="0,0,0,15">
-                    <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[NewGame_DisableSaving]}" Foreground="#E0E0E0"/>
+                    <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[NewGame_DisableSaving]}" Foreground="#E0E0E0" FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc"/>
                 </CheckBox>
-
                 <CheckBox IsChecked="{Binding EnableConsole}"
                           Foreground="#E0E0E0"
-                          FontSize="14"
-                          Margin="0,0,0,15">
-                    <TextBlock Text="{Binding Source={x:Static services:LocalizationService.Instance}, Path=[NewGame_EnableConsole]}" Foreground="#E0E0E0"/>
+                          FontSize="18"
+                          >
+                    <TextBlock Text="{Binding [NewGame_EnableConsole], Source={x:Static services:LocalizationService.Instance}}" Foreground="#E0E0E0" FontFamily="pack://application:,,,/styles/Watc2.TTF#Watc" Height="20" Width="143"/>
                 </CheckBox>
 
             </StackPanel>

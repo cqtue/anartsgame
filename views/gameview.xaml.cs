@@ -9,6 +9,14 @@ using anartsgame.models;
 
 namespace anartsgame.views;
 
+public class RoadAnimationMetadata
+{
+    public double FromX { get; set; }
+    public double FromY { get; set; }
+    public double ToX { get; set; }
+    public double ToY { get; set; }
+}
+
 public partial class GameView : UserControl
 {
     private const int TileSize = 64;
@@ -270,6 +278,50 @@ public partial class GameView : UserControl
         return null;
     }
 
+    private void RemoveAnimationsForRoad(Line road)
+    {
+        var animationsToRemove = new List<UIElement>();
+
+        foreach (var animation in _roadAnimations)
+        {
+            if (animation is Ellipse ellipse && ellipse.Tag is RoadAnimationMetadata metadata)
+            {
+                bool matchesRoad =
+                    (Math.Abs(metadata.FromX - road.X1) < 1 && Math.Abs(metadata.FromY - road.Y1) < 1 &&
+                     Math.Abs(metadata.ToX - road.X2) < 1 && Math.Abs(metadata.ToY - road.Y2) < 1) ||
+                    (Math.Abs(metadata.FromX - road.X2) < 1 && Math.Abs(metadata.FromY - road.Y2) < 1 &&
+                     Math.Abs(metadata.ToX - road.X1) < 1 && Math.Abs(metadata.ToY - road.Y1) < 1);
+
+                if (matchesRoad)
+                {
+                    animationsToRemove.Add(animation);
+                }
+            }
+        }
+
+        foreach (var animation in animationsToRemove)
+        {
+            MapCanvas.Children.Remove(animation);
+            _roadAnimations.Remove(animation);
+        }
+    }
+
+    private void CreateAnimationsForRoads(List<Line> roads)
+    {
+        if (_map == null) return;
+
+        foreach (var road in roads)
+        {
+            var building1 = FindBuildingAtPosition(new Point(road.X1, road.Y1));
+            var building2 = FindBuildingAtPosition(new Point(road.X2, road.Y2));
+
+            if (building1 != null && building2 != null)
+            {
+                CreateRoadAnimation(road, building1, building2);
+            }
+        }
+    }
+
     private void CreateRoadAnimation(Line road, Building building1, Building building2)
     {
         // Skip if either building is Bank or Market
@@ -350,25 +402,29 @@ public partial class GameView : UserControl
 
     private void CreateSingleRoadAnimation(Building fromBuilding, Building toBuilding, Color color, int index)
     {
-        // Create smaller animated element (5px instead of 8px)
         var animatedElement = new Ellipse
         {
             Width = 5,
             Height = 5,
             Fill = new SolidColorBrush(color),
-            Opacity = 0.9
+            Opacity = 0.9,
+            Tag = new RoadAnimationMetadata
+            {
+                FromX = fromBuilding.Position.X,
+                FromY = fromBuilding.Position.Y,
+                ToX = toBuilding.Position.X,
+                ToY = toBuilding.Position.Y
+            }
         };
 
-        // Set initial position at producing building
         Canvas.SetLeft(animatedElement, fromBuilding.Position.X - 2.5);
         Canvas.SetTop(animatedElement, fromBuilding.Position.Y - 2.5);
 
         MapCanvas.Children.Add(animatedElement);
         _roadAnimations.Add(animatedElement);
 
-        // Create animations from producing building to target building
-        double duration = 2.5 + _random.NextDouble() * 1.5; // 2.5-4 seconds
-        double delay = _random.NextDouble() * duration + (index * 0.5); // Staggered start
+        double duration = 2.5 + _random.NextDouble() * 1.5;
+        double delay = _random.NextDouble() * duration + (index * 0.5);
 
         var animX = new DoubleAnimation
         {
@@ -957,6 +1013,7 @@ public partial class GameView : UserControl
                         _buildModeCanvas?.Children.Add(radiusCircle);
                         _buildRadiusCircles.Add(radiusCircle);
 
+                        var newRoads = new List<Line>();
                         var buildingsInRange = FindBuildingsInRange(newBuilding.Position, 250);
                         foreach (var building in buildingsInRange)
                         {
@@ -973,11 +1030,12 @@ public partial class GameView : UserControl
                                 };
                                 MapCanvas.Children.Add(road);
                                 _permanentRoads.Add(road);
+                                newRoads.Add(road);
                             }
                         }
 
                         UpdateRoadCount();
-                        CreateRoadAnimations();
+                        CreateAnimationsForRoads(newRoads);
 
                         ExitBuildMode();
                     }
@@ -2317,6 +2375,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_Factory"]}\n{FormatCost(factoryCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         factoryButton.Click += (s, e) => StartBuildMode(BuildingType.Factory);
@@ -2327,6 +2387,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_Mine"]}\n{FormatCost(mineCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         mineButton.Click += (s, e) => StartBuildMode(BuildingType.Mine);
@@ -2337,6 +2399,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_MeatFactory"]}\n{FormatCost(meatFactoryCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         meatFactoryButton.Click += (s, e) => StartBuildMode(BuildingType.MeatFactory);
@@ -2347,6 +2411,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_Sawmill"]}\n{FormatCost(sawmillCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         sawmillButton.Click += (s, e) => StartBuildMode(BuildingType.Sawmill);
@@ -2357,6 +2423,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_Bank"]}\n{FormatCost(bankCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         bankButton.Click += (s, e) => StartBuildMode(BuildingType.Bank);
@@ -2367,6 +2435,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_Marketplace"]}\n{FormatCost(marketplaceCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         marketplaceButton.Click += (s, e) => StartBuildMode(BuildingType.Marketplace);
@@ -2377,6 +2447,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_Furnace"]}\n{FormatCost(furnaceCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         furnaceButton.Click += (s, e) => StartBuildMode(BuildingType.Furnace);
@@ -2387,6 +2459,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_Altar"]}\n{FormatCost(altarCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         altarButton.Click += (s, e) => StartBuildMode(BuildingType.Altar);
@@ -2397,6 +2471,8 @@ public partial class GameView : UserControl
             Content = $"{services.LocalizationService.Instance["Building_Crystallizer"]}\n{FormatCost(crystallizerCost)}",
             Height = 70,
             Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(20, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("GameButtonStyle")
         };
         crystallizerButton.Click += (s, e) => StartBuildMode(BuildingType.Crystallizer);
@@ -3524,6 +3600,7 @@ public partial class GameView : UserControl
 
         foreach (var road in roadsToRemove)
         {
+            RemoveAnimationsForRoad(road);
             MapCanvas.Children.Remove(road);
             _permanentRoads.Remove(road);
         }

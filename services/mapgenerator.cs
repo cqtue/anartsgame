@@ -161,11 +161,12 @@ public class MapGenerator
                 double mineX = playerBase.Position.X + directionX * placementDistance;
                 double mineY = playerBase.Position.Y + directionY * placementDistance;
 
-                var mine = new Building(BuildingType.Mine, new Point(mineX, mineY));
-                map.Buildings.Add(mine);
-
-                // Place rocks near the mine
-                PlaceRocksNearBuilding(map, mineX, mineY, 3);
+                if (IsPositionValidForBuilding(map, mineX, mineY))
+                {
+                    var mine = new Building(BuildingType.Mine, new Point(mineX, mineY));
+                    map.Buildings.Add(mine);
+                    PlaceRocksNearBuilding(map, mineX, mineY, 3);
+                }
             }
         }
 
@@ -190,18 +191,52 @@ public class MapGenerator
                 double sawmillX = playerBase.Position.X + directionX * placementDistance;
                 double sawmillY = playerBase.Position.Y + directionY * placementDistance;
 
-                var sawmill = new Building(BuildingType.Sawmill, new Point(sawmillX, sawmillY));
-                map.Buildings.Add(sawmill);
+                if (IsPositionValidForBuilding(map, sawmillX, sawmillY))
+                {
+                    var sawmill = new Building(BuildingType.Sawmill, new Point(sawmillX, sawmillY));
+                    map.Buildings.Add(sawmill);
+                }
             }
         }
 
-        double factoryAngle = _random.NextDouble() * Math.PI * 2;
-        double factoryDistance = 100 + _random.NextDouble() * 50;
-        double factoryX = playerBase.Position.X + Math.Cos(factoryAngle) * factoryDistance;
-        double factoryY = playerBase.Position.Y + Math.Sin(factoryAngle) * factoryDistance;
+        int factoryAttempts = 0;
+        int maxFactoryAttempts = 20;
+        bool factoryPlaced = false;
 
-        var factory = new Building(BuildingType.Factory, new Point(factoryX, factoryY));
-        map.Buildings.Add(factory);
+        while (!factoryPlaced && factoryAttempts < maxFactoryAttempts)
+        {
+            factoryAttempts++;
+            double factoryAngle = _random.NextDouble() * Math.PI * 2;
+            double factoryDistance = 100 + _random.NextDouble() * 50;
+            double factoryX = playerBase.Position.X + Math.Cos(factoryAngle) * factoryDistance;
+            double factoryY = playerBase.Position.Y + Math.Sin(factoryAngle) * factoryDistance;
+
+            if (IsPositionValidForBuilding(map, factoryX, factoryY))
+            {
+                var factory = new Building(BuildingType.Factory, new Point(factoryX, factoryY));
+                map.Buildings.Add(factory);
+                factoryPlaced = true;
+            }
+        }
+    }
+
+    private bool IsPositionValidForBuilding(GameMap map, double x, double y)
+    {
+        const double minDistance = 80;
+
+        foreach (var building in map.Buildings)
+        {
+            double dx = x - building.Position.X;
+            double dy = y - building.Position.Y;
+            double distance = Math.Sqrt(dx * dx + dy * dy);
+
+            if (distance < minDistance)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private Tile? FindNearestTileOfType(GameMap map, int centerX, int centerY, TileType type)
