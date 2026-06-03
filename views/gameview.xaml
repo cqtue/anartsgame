@@ -74,9 +74,15 @@
                 <SolidColorBrush Color="#1a1a1a" Opacity="0.5"/>
             </Grid.Background>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Button x:Name="BuildButton" Content="🏗" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="BuildButton_Click" FontSize="24"/>
-                <Button x:Name="ResearchButton" Content="🔬" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="ResearchButton_Click" FontSize="24"/>
-                <Button x:Name="TradeButton" Content="💱" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="TradeButton_Click" FontSize="24"/>
+                <Button x:Name="BuildButton" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="BuildButton_Click">
+                    <Image Source="/sprites/icon_buldingmenu.png" Stretch="Uniform"/>
+                </Button>
+                <Button x:Name="ResearchButton" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="ResearchButton_Click">
+                    <Image Source="/sprites/icon_researchmenu.png" Stretch="Uniform"/>
+                </Button>
+                <Button x:Name="TradeButton" Style="{StaticResource GameButtonStyle}" Width="70" Height="60" Margin="10" Click="TradeButton_Click">
+                    <Image Source="/sprites/icon_trademenu.png" Stretch="Uniform"/>
+                </Button>
             </StackPanel>
         </Grid>
 

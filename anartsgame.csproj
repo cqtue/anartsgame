@@ -10,6 +10,9 @@
 
   <ItemGroup>
     <Resource Include="styles\Watc2.TTF" />
+    <Resource Include="sprites\icon_buldingmenu.png" />
+    <Resource Include="sprites\icon_researchmenu.png" />
+    <Resource Include="sprites\icon_trademenu.png" />
   </ItemGroup>
 
   <ItemGroup>
