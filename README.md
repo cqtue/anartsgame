@@ -1,4 +1,3 @@
-[![.NET](https://img.shields.io/badge/.NET-10.0-darkgreen](https://dotnet.microsoft.com/)
 геймплейно проста комп'ютерна гра, зроблена для курсової роботи
 смішно реалізовано такі фукнції як:
 

@@ -1,0 +1,104 @@
+<UserControl x:Class="anartsgame.views.TradeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="0,10,0,0">
+        <TextBlock x:Name="NoMarketplaceMessage"
+                   Foreground="#C86464"
+                   FontSize="14"
+                   TextWrapping="Wrap"
+                   HorizontalAlignment="Center"
+                   Margin="0,20,0,0"
+                   Visibility="Collapsed"/>
+
+        <StackPanel x:Name="TradeContentPanel">
+            <StackPanel x:Name="Stage1Panel" Visibility="Collapsed">
+                <TextBlock x:Name="Stage1Info"
+                           Foreground="#C8C8C8"
+                           FontSize="13"
+                           FontWeight="Bold"
+                           Margin="0,0,0,10"/>
+                <TextBlock x:Name="Stage1Rate"
+                           Foreground="#969696"
+                           FontSize="11"
+                           Margin="0,0,0,15"/>
+                <StackPanel x:Name="Stage1Resources"/>
+            </StackPanel>
+
+            <StackPanel x:Name="Stage2Panel" Visibility="Collapsed">
+                <Button x:Name="Stage2BackButton"
+                        Width="100"
+                        Height="35"
+                        Margin="0,0,0,15"
+                        FontSize="11"
+                        HorizontalAlignment="Left"
+                        Click="Stage2BackButton_Click"/>
+                <TextBlock x:Name="Stage2Info"
+                           Foreground="#C8C8C8"
+                           FontSize="13"
+                           FontWeight="Bold"
+                           Margin="0,0,0,10"/>
+                <TextBlock x:Name="Stage2Available"
+                           Foreground="#969696"
+                           FontSize="11"
+                           Margin="0,0,0,10"/>
+                <TextBlock x:Name="Stage2Amount"
+                           Foreground="#C8C8C8"
+                           FontSize="12"
+                           Margin="0,0,0,5"/>
+                <Slider x:Name="Stage2Slider"
+                        Margin="0,0,0,15"
+                        TickFrequency="10"
+                        IsSnapToTickEnabled="True"
+                        ValueChanged="Stage2Slider_ValueChanged"/>
+                <Button x:Name="Stage2NextButton"
+                        Height="45"
+                        Margin="0,10,0,0"
+                        FontSize="12"
+                        Click="Stage2NextButton_Click"/>
+            </StackPanel>
+
+            <StackPanel x:Name="Stage3Panel" Visibility="Collapsed">
+                <Button x:Name="Stage3BackButton"
+                        Width="100"
+                        Height="35"
+                        Margin="0,0,0,15"
+                        FontSize="11"
+                        HorizontalAlignment="Left"
+                        Click="Stage3BackButton_Click"/>
+                <TextBlock x:Name="Stage3Info"
+                           Foreground="#C8C8C8"
+                           FontSize="13"
+                           FontWeight="Bold"
+                           Margin="0,0,0,10"/>
+                <TextBlock x:Name="Stage3Giving"
+                           Foreground="#C89696"
+                           FontSize="12"
+                           Margin="0,0,0,15"/>
+                <Border x:Name="Stage3Calculation"
+                        Background="#2864C864"
+                        Margin="0,0,0,15"
+                        Padding="10"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="Stage3Receive"
+                                   Foreground="#96FA96"
+                                   FontSize="13"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,5"/>
+                        <TextBlock x:Name="Stage3Rate"
+                                   Foreground="#969696"
+                                   FontSize="11"/>
+                    </StackPanel>
+                </Border>
+                <Button x:Name="Stage3ConfirmButton"
+                        Height="50"
+                        Margin="0,10,0,0"
+                        FontSize="13"
+                        Background="#329632"
+                        Visibility="Collapsed"
+                        Click="Stage3ConfirmButton_Click"/>
+                <StackPanel x:Name="Stage3Resources"/>
+            </StackPanel>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

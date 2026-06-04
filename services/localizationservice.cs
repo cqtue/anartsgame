@@ -72,6 +72,7 @@ public class LocalizationService : INotifyPropertyChanged
             ["Game_Error_SawmillNoTrees"] = "Лісопилка: має бути біля дерев",
             ["Game_Error_BankLimit"] = "Банк може бути лише один",
             ["Game_Error_MarketLimit"] = "Маркет може бути лише один",
+            ["Game_Error_NotEnoughResources"] = "Недостатньо:",
 
             ["Resource_Metal"] = "метал",
             ["Resource_Organic"] = "органіка",
@@ -210,6 +211,7 @@ public class LocalizationService : INotifyPropertyChanged
             ["Game_Error_SawmillNoTrees"] = "sawmill: must be near trees",
             ["Game_Error_BankLimit"] = "bank can only be one",
             ["Game_Error_MarketLimit"] = "market can only be one",
+            ["Game_Error_NotEnoughResources"] = "Not enough:",
 
             ["Resource_Metal"] = "metal",
             ["Resource_Organic"] = "organic",

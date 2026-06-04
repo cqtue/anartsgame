@@ -6,6 +6,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Linq;
 using anartsgame.models;
+using anartsgame.helpers;
 
 namespace anartsgame.views;
 
@@ -49,6 +50,7 @@ public partial class GameView : UserControl
     private TextBlock? _buildErrorTooltip;
     private List<Line> _permanentRoads = new();
     private List<UIElement> _roadAnimations = new();
+    private Point _lastBuildModePosition;
 
     private Building? _selectedBuilding = null;
     private bool _deleteConfirmationState = false;
@@ -57,8 +59,6 @@ public partial class GameView : UserControl
     private Dictionary<ResourceType, int> _resources = new();
     private List<Research> _availableResearch = new();
     private List<Research> _completedResearch = new();
-
-    // Trading system state
     private int _tradeStage = 1;
     private ResourceType? _tradeFromResource = null;
     private int _tradeFromAmount = 0;
@@ -81,6 +81,12 @@ public partial class GameView : UserControl
     // UI update throttling for building panel
     private int _buildingPanelUpdateCounter = 0;
     private const int BuildingPanelUpdateInterval = 5; // Update every 5 ticks (500ms)
+
+    // View instances
+    private BuildingMenuView? _buildingMenuView;
+    private ResearchView? _researchView;
+    private TradeView? _tradeView;
+    private BuildingInfoView? _buildingInfoView;
 
     public GameView(bool loadFromSave = false, viewmodels.GameSettings? settings = null)
     {
@@ -173,6 +179,11 @@ public partial class GameView : UserControl
         MapCanvas.Children.Clear();
         _permanentRoads.Clear();
 
+        MapCanvas.Width = _map.Width * TileSize;
+        MapCanvas.Height = _map.Height * TileSize;
+
+        CreateBackgroundElements();
+
         for (int x = 0; x < _map.Width; x++)
         {
             for (int y = 0; y < _map.Height; y++)
@@ -187,9 +198,6 @@ public partial class GameView : UserControl
                 }
             }
         }
-
-        MapCanvas.Width = _map.Width * TileSize;
-        MapCanvas.Height = _map.Height * TileSize;
 
         foreach (var building in _map.Buildings)
         {
@@ -256,6 +264,23 @@ public partial class GameView : UserControl
                 CreateRoadAnimation(road, building1, building2);
             }
         }
+    }
+
+    private void CreateBackgroundElements()
+    {
+        if (_map == null) return;
+
+        var width = MapCanvas.Width;
+        var height = MapCanvas.Height;
+
+        var grid = VisualEffects.CreateBackgroundGrid(width, height, TileSize);
+        MapCanvas.Children.Insert(0, grid);
+
+        var particles = VisualEffects.CreateAmbientParticles(width, height, 15);
+        MapCanvas.Children.Insert(0, particles);
+
+        var scanLines = VisualEffects.CreateScanLines(width, height, 4);
+        MapCanvas.Children.Insert(0, scanLines);
     }
 
     private Building? FindBuildingAtPosition(Point position)
@@ -1135,8 +1160,8 @@ public partial class GameView : UserControl
     private void RenderBuilding(Building building)
     {
         var visual = CreateBuildingVisual(building);
-        Canvas.SetLeft(visual, building.Position.X - building.Size / 2);
-        Canvas.SetTop(visual, building.Position.Y - building.Size / 2);
+        Canvas.SetLeft(visual, building.Position.X - building.Size);
+        Canvas.SetTop(visual, building.Position.Y - building.Size);
         MapCanvas.Children.Add(visual);
     }
 
@@ -1157,6 +1182,17 @@ public partial class GameView : UserControl
             _ => Color.FromRgb(128, 128, 128)
         };
 
+        var container = new Canvas
+        {
+            Width = building.Size * 2,
+            Height = building.Size * 2
+        };
+
+        var glow = VisualEffects.CreateBuildingGlow(building.Size, color, true);
+        Canvas.SetLeft(glow, 0);
+        Canvas.SetTop(glow, 0);
+        container.Children.Add(glow);
+
         var ellipse = new Ellipse
         {
             Width = building.Size,
@@ -1165,14 +1201,19 @@ public partial class GameView : UserControl
             {
                 GradientStops = new GradientStopCollection
                 {
-                    new GradientStop(Color.FromRgb((byte)(color.R * 1.3), (byte)(color.G * 1.3), (byte)(color.B * 1.3)), 0.0),
+                    new GradientStop(Color.FromRgb((byte)Math.Min(255, color.R * 1.3), (byte)Math.Min(255, color.G * 1.3), (byte)Math.Min(255, color.B * 1.3)), 0.0),
                     new GradientStop(color, 0.7),
                     new GradientStop(Color.FromRgb((byte)(color.R * 0.5), (byte)(color.G * 0.5), (byte)(color.B * 0.5)), 1.0)
                 }
             }
         };
+        Canvas.SetLeft(ellipse, building.Size / 2);
+        Canvas.SetTop(ellipse, building.Size / 2);
+        container.Children.Add(ellipse);
 
-        return ellipse;
+        VisualEffects.AddBreathingAnimation(ellipse, 4.0);
+
+        return container;
     }
 
     private void ExitBuildMode()
@@ -1433,37 +1474,56 @@ public partial class GameView : UserControl
             Canvas.SetTop(_buildPrototype, mapPos.Y - size / 2);
             _buildPrototype.Visibility = Visibility.Visible;
 
-            foreach (var line in _buildRoadLines)
-            {
-                line.Visibility = Visibility.Collapsed;
-            }
+            _lastBuildModePosition = mapPos;
+            UpdateBuildModeValidation(mapPos);
 
-            if (_buildErrorTooltip != null)
-            {
-                _buildErrorTooltip.Visibility = Visibility.Collapsed;
-            }
+            e.Handled = true;
+        }
+    }
 
-            bool hasOverlap = CheckBuildingOverlap(mapPos, size);
-            var nearestBuilding = FindNearestBuilding(mapPos);
-            bool withinBuildingRadius = false;
-            string errorMessage = "";
+    private void UpdateBuildModeValidation(Point mapPos)
+    {
+        if (_buildPrototype == null || _map == null || !_isBuildMode || !_selectedBuildingType.HasValue)
+            return;
 
-            if (nearestBuilding != null)
+        foreach (var line in _buildRoadLines)
+        {
+            line.Visibility = Visibility.Collapsed;
+        }
+
+        if (_buildErrorTooltip != null)
+        {
+            _buildErrorTooltip.Visibility = Visibility.Collapsed;
+        }
+
+        bool hasOverlap = CheckBuildingOverlap(mapPos, _buildPrototype.Width);
+        var nearestBuilding = FindNearestBuilding(mapPos);
+        bool withinBuildingRadius = false;
+        string errorMessage = "";
+
+        if (nearestBuilding != null)
+        {
+            double distanceToBuilding = Math.Sqrt(
+                Math.Pow(mapPos.X - nearestBuilding.Position.X, 2) +
+                Math.Pow(mapPos.Y - nearestBuilding.Position.Y, 2)
+            );
+            withinBuildingRadius = distanceToBuilding <= GetEffectiveBuildRadius(nearestBuilding);
+        }
+        else
+        {
+            errorMessage = services.LocalizationService.Instance["Game_Error_TooFar"];
+        }
+
+        bool isValid = false;
+
+        if (_selectedBuildingType == BuildingType.Mine)
+        {
+            if (!CheckResourcesForBuilding(_selectedBuildingType.Value))
             {
-                double distanceToBuilding = Math.Sqrt(
-                    Math.Pow(mapPos.X - nearestBuilding.Position.X, 2) +
-                    Math.Pow(mapPos.Y - nearestBuilding.Position.Y, 2)
-                );
-                withinBuildingRadius = distanceToBuilding <= GetEffectiveBuildRadius(nearestBuilding);
+                errorMessage = GetMissingResourcesMessage(_selectedBuildingType.Value);
+                isValid = false;
             }
             else
-            {
-                errorMessage = services.LocalizationService.Instance["Game_Error_TooFar"];
-            }
-
-            bool isValid = false;
-
-            if (_selectedBuildingType == BuildingType.Mine)
             {
                 var nearestRock = FindNearestTileOfType(mapPos, TileType.Rock);
                 bool nearResource = false;
@@ -1500,7 +1560,15 @@ public partial class GameView : UserControl
 
                 isValid = (_infiniteBuildDistance || withinBuildingRadius) && nearResource && !hasOverlap;
             }
-            else if (_selectedBuildingType == BuildingType.Sawmill)
+        }
+        else if (_selectedBuildingType == BuildingType.Sawmill)
+        {
+            if (!CheckResourcesForBuilding(_selectedBuildingType.Value))
+            {
+                errorMessage = GetMissingResourcesMessage(_selectedBuildingType.Value);
+                isValid = false;
+            }
+            else
             {
                 var nearestTree = FindNearestTileOfType(mapPos, TileType.Tree);
                 bool nearTree = false;
@@ -1537,7 +1605,15 @@ public partial class GameView : UserControl
 
                 isValid = (_infiniteBuildDistance || withinBuildingRadius) && nearTree && !hasOverlap;
             }
-            else if (_selectedBuildingType == BuildingType.Bank)
+        }
+        else if (_selectedBuildingType == BuildingType.Bank)
+        {
+            if (!CheckResourcesForBuilding(_selectedBuildingType.Value))
+            {
+                errorMessage = GetMissingResourcesMessage(_selectedBuildingType.Value);
+                isValid = false;
+            }
+            else
             {
                 bool bankExists = _map.Buildings.Any(b => b.Type == BuildingType.Bank);
 
@@ -1559,7 +1635,15 @@ public partial class GameView : UserControl
                     isValid = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
                 }
             }
-            else if (_selectedBuildingType == BuildingType.Marketplace)
+        }
+        else if (_selectedBuildingType == BuildingType.Marketplace)
+        {
+            if (!CheckResourcesForBuilding(_selectedBuildingType.Value))
+            {
+                errorMessage = GetMissingResourcesMessage(_selectedBuildingType.Value);
+                isValid = false;
+            }
+            else
             {
                 bool marketplaceExists = _map.Buildings.Any(b => b.Type == BuildingType.Marketplace);
 
@@ -1581,6 +1665,14 @@ public partial class GameView : UserControl
                     isValid = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
                 }
             }
+        }
+        else
+        {
+            if (!CheckResourcesForBuilding(_selectedBuildingType.Value))
+            {
+                errorMessage = GetMissingResourcesMessage(_selectedBuildingType.Value);
+                isValid = false;
+            }
             else
             {
                 if (!withinBuildingRadius)
@@ -1594,42 +1686,40 @@ public partial class GameView : UserControl
 
                 isValid = (_infiniteBuildDistance || withinBuildingRadius) && !hasOverlap;
             }
+        }
 
-            if (isValid)
+        if (isValid)
+        {
+            _buildPrototype.Fill = new SolidColorBrush(Color.FromArgb(100, 100, 200, 255));
+
+            var buildingsInRange = FindBuildingsInRange(mapPos, 250);
+            int roadIndex = 0;
+
+            foreach (var building in buildingsInRange)
             {
-                _buildPrototype.Fill = new SolidColorBrush(Color.FromArgb(100, 100, 200, 255));
-
-                var buildingsInRange = FindBuildingsInRange(mapPos, 250);
-                int roadIndex = 0;
-
-                foreach (var building in buildingsInRange)
+                if (roadIndex < _buildRoadLines.Count)
                 {
-                    if (roadIndex < _buildRoadLines.Count)
-                    {
-                        var roadLine = _buildRoadLines[roadIndex];
-                        roadLine.X1 = building.Position.X;
-                        roadLine.Y1 = building.Position.Y;
-                        roadLine.X2 = mapPos.X;
-                        roadLine.Y2 = mapPos.Y;
-                        roadLine.Visibility = Visibility.Visible;
-                        roadIndex++;
-                    }
+                    var roadLine = _buildRoadLines[roadIndex];
+                    roadLine.X1 = building.Position.X;
+                    roadLine.Y1 = building.Position.Y;
+                    roadLine.X2 = mapPos.X;
+                    roadLine.Y2 = mapPos.Y;
+                    roadLine.Visibility = Visibility.Visible;
+                    roadIndex++;
                 }
             }
-            else
+        }
+        else
+        {
+            _buildPrototype.Fill = new SolidColorBrush(Color.FromArgb(100, 200, 100, 100));
+
+            if (_buildErrorTooltip != null && !string.IsNullOrEmpty(errorMessage))
             {
-                _buildPrototype.Fill = new SolidColorBrush(Color.FromArgb(100, 200, 100, 100));
-
-                if (_buildErrorTooltip != null && !string.IsNullOrEmpty(errorMessage))
-                {
-                    _buildErrorTooltip.Text = errorMessage;
-                    Canvas.SetLeft(_buildErrorTooltip, mapPos.X - 50);
-                    Canvas.SetTop(_buildErrorTooltip, mapPos.Y - 40);
-                    _buildErrorTooltip.Visibility = Visibility.Visible;
-                }
+                _buildErrorTooltip.Text = errorMessage;
+                Canvas.SetLeft(_buildErrorTooltip, mapPos.X - 50);
+                Canvas.SetTop(_buildErrorTooltip, mapPos.Y - 40);
+                _buildErrorTooltip.Visibility = Visibility.Visible;
             }
-
-            e.Handled = true;
         }
     }
 
@@ -1695,6 +1785,48 @@ public partial class GameView : UserControl
         }
 
         return false;
+    }
+
+    private bool CheckResourcesForBuilding(BuildingType type)
+    {
+        var buildCost = Building.GetBuildCost(type);
+
+        foreach (var cost in buildCost)
+        {
+            if (!_resources.ContainsKey(cost.Key) || _resources[cost.Key] < cost.Value)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private string GetMissingResourcesMessage(BuildingType type)
+    {
+        var buildCost = Building.GetBuildCost(type);
+        var missingParts = new List<string>();
+
+        foreach (var cost in buildCost)
+        {
+            int currentAmount = _resources.ContainsKey(cost.Key) ? _resources[cost.Key] : 0;
+            int needed = cost.Value;
+
+            if (currentAmount < needed)
+            {
+                string resourceName = GetResourceName(cost.Key);
+                int deficit = needed - currentAmount;
+                missingParts.Add($"{resourceName} (-{deficit})");
+            }
+        }
+
+        if (missingParts.Count == 0)
+        {
+            return "";
+        }
+
+        string prefix = services.LocalizationService.Instance["Game_Error_NotEnoughResources"];
+        return $"{prefix} {string.Join(", ", missingParts)}";
     }
 
     private Building? GetBuildingAtPosition(Point position)
@@ -1769,6 +1901,12 @@ public partial class GameView : UserControl
             UpdateGathering(deltaTime);
             UpdateBatchProduction(deltaTime);
 
+            // Update build mode validation continuously (not just on mouse move)
+            if (_isBuildMode && _selectedBuildingType.HasValue)
+            {
+                UpdateBuildModeValidation(_lastBuildModePosition);
+            }
+
             // Periodically refresh building panel to update upgrade button states
             _buildingPanelUpdateCounter++;
             if (_buildingPanelUpdateCounter >= BuildingPanelUpdateInterval)
@@ -1796,12 +1934,12 @@ public partial class GameView : UserControl
 
                 if (_currentOpenPanel == "research")
                 {
-                    RightPanelContent.Content = CreateResearchPanelContent();
+                    UpdateResearchView();
                 }
             }
             else if (_currentOpenPanel == "research")
             {
-                RightPanelContent.Content = CreateResearchPanelContent();
+                UpdateResearchView();
             }
         }
     }
@@ -1839,12 +1977,12 @@ public partial class GameView : UserControl
 
                         if (_selectedBuilding == building)
                         {
-                            RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+                            UpdateBuildingInfoView(building);
                         }
                     }
                     else if (_selectedBuilding == building)
                     {
-                        RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+                        UpdateBuildingInfoView(building);
                     }
                 }
                 else if (building.InvestmentCooldown > 0)
@@ -1857,7 +1995,7 @@ public partial class GameView : UserControl
 
                     if (_selectedBuilding == building)
                     {
-                        RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+                        UpdateBuildingInfoView(building);
                     }
                 }
             }
@@ -1894,17 +2032,18 @@ public partial class GameView : UserControl
 
     private void RefreshBuildingPanelIfOpen()
     {
-        // Refresh building panel to update upgrade button states when resources change
         if (_currentOpenPanel == "buildingInfo" && _selectedBuilding != null)
         {
-            // Don't refresh for Altar/Crystallizer when NOT producing (to avoid resetting slider)
             if ((_selectedBuilding.Type == BuildingType.Altar || _selectedBuilding.Type == BuildingType.Crystallizer)
                 && !_selectedBuilding.IsBatchProducing)
             {
                 return;
             }
 
-            RightPanelContent.Content = CreateBuildingInfoPanelContent(_selectedBuilding);
+            if (_buildingInfoView != null)
+            {
+                _buildingInfoView.UpdateProgress();
+            }
         }
     }
 
@@ -2171,7 +2310,7 @@ public partial class GameView : UserControl
 
         if (_currentOpenPanel == "research")
         {
-            RightPanelContent.Content = CreateResearchPanelContent();
+            UpdateResearchView();
         }
     }
 
@@ -2197,7 +2336,7 @@ public partial class GameView : UserControl
 
         if (_selectedBuilding == building)
         {
-            RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+            UpdateBuildingInfoView(building);
         }
     }
 
@@ -2366,135 +2505,7 @@ public partial class GameView : UserControl
 
     private UIElement CreateBuildPanelContent()
     {
-        var panel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-        double costMultiplier = GetBuildCostMultiplier();
-
-        var factoryCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Factory), costMultiplier);
-        var factoryButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_Factory"]}\n{FormatCost(factoryCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        factoryButton.Click += (s, e) => StartBuildMode(BuildingType.Factory);
-
-        var mineCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Mine), costMultiplier);
-        var mineButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_Mine"]}\n{FormatCost(mineCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        mineButton.Click += (s, e) => StartBuildMode(BuildingType.Mine);
-
-        var meatFactoryCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.MeatFactory), costMultiplier);
-        var meatFactoryButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_MeatFactory"]}\n{FormatCost(meatFactoryCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        meatFactoryButton.Click += (s, e) => StartBuildMode(BuildingType.MeatFactory);
-
-        var sawmillCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Sawmill), costMultiplier);
-        var sawmillButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_Sawmill"]}\n{FormatCost(sawmillCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        sawmillButton.Click += (s, e) => StartBuildMode(BuildingType.Sawmill);
-
-        var bankCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Bank), costMultiplier);
-        var bankButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_Bank"]}\n{FormatCost(bankCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        bankButton.Click += (s, e) => StartBuildMode(BuildingType.Bank);
-
-        var marketplaceCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Marketplace), costMultiplier);
-        var marketplaceButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_Marketplace"]}\n{FormatCost(marketplaceCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        marketplaceButton.Click += (s, e) => StartBuildMode(BuildingType.Marketplace);
-
-        var furnaceCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Furnace), costMultiplier);
-        var furnaceButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_Furnace"]}\n{FormatCost(furnaceCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        furnaceButton.Click += (s, e) => StartBuildMode(BuildingType.Furnace);
-
-        var altarCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Altar), costMultiplier);
-        var altarButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_Altar"]}\n{FormatCost(altarCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        altarButton.Click += (s, e) => StartBuildMode(BuildingType.Altar);
-
-        var crystallizerCost = ApplyCostMultiplier(Building.GetBuildCost(BuildingType.Crystallizer), costMultiplier);
-        var crystallizerButton = new Button
-        {
-            Content = $"{services.LocalizationService.Instance["Building_Crystallizer"]}\n{FormatCost(crystallizerCost)}",
-            Height = 70,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(20, 0, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Style = (Style)FindResource("GameButtonStyle")
-        };
-        crystallizerButton.Click += (s, e) => StartBuildMode(BuildingType.Crystallizer);
-
-        panel.Children.Add(factoryButton);
-        panel.Children.Add(mineButton);
-        panel.Children.Add(meatFactoryButton);
-        panel.Children.Add(sawmillButton);
-        panel.Children.Add(bankButton);
-        panel.Children.Add(marketplaceButton);
-        panel.Children.Add(furnaceButton);
-        panel.Children.Add(altarButton);
-        panel.Children.Add(crystallizerButton);
-
-        var scrollViewer = new ScrollViewer
-        {
-            Content = panel,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
-        };
-
-        return scrollViewer;
+        return new StackPanel();
     }
 
     private string FormatCost(Dictionary<ResourceType, int> cost)
@@ -2506,416 +2517,6 @@ public partial class GameView : UserControl
             parts.Add($"{item.Value} {resourceName}");
         }
         return string.Join(", ", parts);
-    }
-
-    private UIElement CreateResearchPanelContent()
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-
-        if (_currentResearch != null && _currentResearch.IsResearching)
-        {
-            var currentResearchPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 20) };
-
-            var nameText = new TextBlock
-            {
-                Text = _currentResearch.Name,
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 200, 255)),
-                FontSize = 14,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 5)
-            };
-            currentResearchPanel.Children.Add(nameText);
-
-            var progressBar = new System.Windows.Controls.ProgressBar
-            {
-                Height = 12,
-                Background = new SolidColorBrush(Color.FromRgb(40, 40, 40)),
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 200, 255)),
-                Value = _currentResearch.Progress * 100,
-                Maximum = 100,
-                Margin = new Thickness(0, 0, 0, 5)
-            };
-            currentResearchPanel.Children.Add(progressBar);
-
-            var timeText = new TextBlock
-            {
-                Text = $"{services.LocalizationService.Instance["Research_Remaining"]} {(_currentResearch.Duration * (1 - _currentResearch.Progress)):F1}с",
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                FontSize = 11
-            };
-            currentResearchPanel.Children.Add(timeText);
-
-            panel.Children.Add(currentResearchPanel);
-        }
-
-        var availableLabel = new TextBlock
-        {
-            Text = services.LocalizationService.Instance["Research_Available"],
-            Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-            FontSize = 12,
-            Margin = new Thickness(0, 0, 0, 10)
-        };
-        panel.Children.Add(availableLabel);
-
-        foreach (var research in _availableResearch)
-        {
-            if (research.IsCompleted) continue;
-
-            var researchPanel = new StackPanel
-            {
-                Margin = new Thickness(0, 0, 0, 15),
-                Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255))
-            };
-
-            var researchName = new TextBlock
-            {
-                Text = research.Name,
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(5, 5, 5, 3)
-            };
-            researchPanel.Children.Add(researchName);
-
-            var researchDesc = new TextBlock
-            {
-                Text = research.Description,
-                Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(5, 0, 5, 5)
-            };
-            researchPanel.Children.Add(researchDesc);
-
-            var costText = "";
-            foreach (var cost in research.Cost)
-            {
-                if (costText.Length > 0) costText += ", ";
-                costText += $"{GetResourceName(cost.Key)}: {cost.Value}";
-            }
-
-            var costLabel = new TextBlock
-            {
-                Text = $"{services.LocalizationService.Instance["Research_Cost"]} {costText}",
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                FontSize = 10,
-                Margin = new Thickness(5, 0, 5, 5)
-            };
-            researchPanel.Children.Add(costLabel);
-
-            var researchButton = new Button
-            {
-                Content = $"{services.LocalizationService.Instance["Research_Button"]} ({research.Duration}с)",
-                Height = 35,
-                Margin = new Thickness(5, 0, 5, 5),
-                Style = (Style)FindResource("GameButtonStyle"),
-                FontSize = 11
-            };
-
-            bool canAfford = true;
-            foreach (var cost in research.Cost)
-            {
-                if (!_resources.ContainsKey(cost.Key) || _resources[cost.Key] < cost.Value)
-                {
-                    canAfford = false;
-                    break;
-                }
-            }
-
-            if (!canAfford || (_currentResearch != null && _currentResearch.IsResearching))
-            {
-                researchButton.Opacity = 0.5;
-                researchButton.IsEnabled = false;
-            }
-
-            researchButton.Click += (s, e) => StartResearch(research);
-            researchPanel.Children.Add(researchButton);
-
-            panel.Children.Add(researchPanel);
-        }
-
-        var scrollViewer = new ScrollViewer
-        {
-            Content = panel,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
-        };
-
-        return scrollViewer;
-    }
-
-    private UIElement CreateTradePanelContent()
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-
-        bool hasMarketplace = _map?.Buildings.Any(b => b.Type == BuildingType.Marketplace) ?? false;
-
-        if (!hasMarketplace)
-        {
-            var messageText = new TextBlock
-            {
-                Text = services.LocalizationService.Instance["Trade_NeedMarket"],
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 100, 100)),
-                FontSize = 14,
-                TextWrapping = TextWrapping.Wrap,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 20, 0, 0)
-            };
-            panel.Children.Add(messageText);
-            return panel;
-        }
-
-        // Stage 1: Choose resource to give
-        if (_tradeStage == 1)
-        {
-            var infoText = new TextBlock
-            {
-                Text = services.LocalizationService.Instance["Trade_Step1"],
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            panel.Children.Add(infoText);
-
-            var rateText = new TextBlock
-            {
-                Text = services.LocalizationService.Instance["Trade_Rate"],
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                FontSize = 11,
-                Margin = new Thickness(0, 0, 0, 15)
-            };
-            panel.Children.Add(rateText);
-
-            foreach (ResourceType resource in Enum.GetValues(typeof(ResourceType)))
-            {
-                // Exclude diamonds from market trading
-                if (resource == ResourceType.Diamonds)
-                    continue;
-
-                if (!_resources.ContainsKey(resource) || _resources[resource] <= 100)
-                    continue;
-
-                var resourceButton = new Button
-                {
-                    Content = $"{GetResourceName(resource)}\n({services.LocalizationService.Instance["Trade_Has"]} {_resources[resource]})",
-                    Height = 60,
-                    Margin = new Thickness(0, 0, 0, 10),
-                    Style = (Style)FindResource("GameButtonStyle"),
-                    FontSize = 12
-                };
-                resourceButton.Click += (s, e) =>
-                {
-                    _tradeFromResource = resource;
-                    _tradeFromAmount = 100;
-                    _tradeStage = 2;
-                    RightPanelContent.Content = CreateTradePanelContent();
-                };
-                panel.Children.Add(resourceButton);
-            }
-        }
-        // Stage 2: Choose amount to give
-        else if (_tradeStage == 2 && _tradeFromResource.HasValue)
-        {
-            var backButton = new Button
-            {
-                Content = services.LocalizationService.Instance["Trade_Back"],
-                Width = 100,
-                Height = 35,
-                Margin = new Thickness(0, 0, 0, 15),
-                Style = (Style)FindResource("GameButtonStyle"),
-                FontSize = 11,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            backButton.Click += (s, e) =>
-            {
-                _tradeStage = 1;
-                _tradeFromResource = null;
-                _tradeFromAmount = 0;
-                RightPanelContent.Content = CreateTradePanelContent();
-            };
-            panel.Children.Add(backButton);
-
-            var infoText = new TextBlock
-            {
-                Text = $"{services.LocalizationService.Instance["Trade_Step2"]} {GetResourceName(_tradeFromResource.Value)}",
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            panel.Children.Add(infoText);
-
-            var availableText = new TextBlock
-            {
-                Text = $"{services.LocalizationService.Instance["Trade_Available"]} {_resources[_tradeFromResource.Value]}",
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                FontSize = 11,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            panel.Children.Add(availableText);
-
-            var amountText = new TextBlock
-            {
-                Text = $"{services.LocalizationService.Instance["Trade_Amount"]} {_tradeFromAmount}",
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                FontSize = 12,
-                Margin = new Thickness(0, 0, 0, 5)
-            };
-            panel.Children.Add(amountText);
-
-            var slider = new Slider
-            {
-                Minimum = 1,
-                Maximum = _resources[_tradeFromResource.Value],
-                Value = _tradeFromAmount,
-                TickFrequency = 10,
-                IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 0, 0, 15)
-            };
-            slider.ValueChanged += (s, e) =>
-            {
-                _tradeFromAmount = (int)slider.Value;
-                amountText.Text = $"{services.LocalizationService.Instance["Trade_Amount"]} {_tradeFromAmount}";
-            };
-            panel.Children.Add(slider);
-
-            var nextButton = new Button
-            {
-                Content = services.LocalizationService.Instance["Trade_Next"],
-                Height = 45,
-                Margin = new Thickness(0, 10, 0, 0),
-                Style = (Style)FindResource("GameButtonStyle"),
-                FontSize = 12
-            };
-            nextButton.Click += (s, e) =>
-            {
-                _tradeStage = 3;
-                RightPanelContent.Content = CreateTradePanelContent();
-            };
-            panel.Children.Add(nextButton);
-        }
-        // Stage 3: Choose resource to receive and confirm
-        else if (_tradeStage == 3 && _tradeFromResource.HasValue)
-        {
-            var backButton = new Button
-            {
-                Content = services.LocalizationService.Instance["Trade_Back"],
-                Width = 100,
-                Height = 35,
-                Margin = new Thickness(0, 0, 0, 15),
-                Style = (Style)FindResource("GameButtonStyle"),
-                FontSize = 11,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            backButton.Click += (s, e) =>
-            {
-                _tradeStage = 2;
-                _tradeToResource = null;
-                RightPanelContent.Content = CreateTradePanelContent();
-            };
-            panel.Children.Add(backButton);
-
-            var infoText = new TextBlock
-            {
-                Text = services.LocalizationService.Instance["Trade_Step3"],
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            panel.Children.Add(infoText);
-
-            var givingText = new TextBlock
-            {
-                Text = $"{services.LocalizationService.Instance["Trade_Giving"]} {_tradeFromAmount} {GetResourceName(_tradeFromResource.Value)}",
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 150, 150)),
-                FontSize = 12,
-                Margin = new Thickness(0, 0, 0, 15)
-            };
-            panel.Children.Add(givingText);
-
-            if (_tradeToResource.HasValue)
-            {
-                int receiveAmount = (int)(_tradeFromAmount * 0.6);
-
-                var calculationBorder = new Border
-                {
-                    Background = new SolidColorBrush(Color.FromArgb(40, 100, 200, 100)),
-                    Margin = new Thickness(0, 0, 0, 15),
-                    Padding = new Thickness(10)
-                };
-
-                var calculationPanel = new StackPanel();
-
-                var calcText = new TextBlock
-                {
-                    Text = $"{services.LocalizationService.Instance["Trade_Receive"]} {receiveAmount} {GetResourceName(_tradeToResource.Value)}",
-                    Foreground = new SolidColorBrush(Color.FromRgb(150, 250, 150)),
-                    FontSize = 13,
-                    FontWeight = FontWeights.Bold,
-                    Margin = new Thickness(0, 0, 0, 5)
-                };
-                calculationPanel.Children.Add(calcText);
-
-                var rateText = new TextBlock
-                {
-                    Text = $"{services.LocalizationService.Instance["Trade_RateDisplay"]} {_tradeFromAmount} → {receiveAmount} ({(int)(0.6 * 100)}%)",
-                    Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                    FontSize = 11
-                };
-                calculationPanel.Children.Add(rateText);
-
-                calculationBorder.Child = calculationPanel;
-                panel.Children.Add(calculationBorder);
-
-                var confirmButton = new Button
-                {
-                    Content = services.LocalizationService.Instance["Trade_Confirm"],
-                    Height = 50,
-                    Margin = new Thickness(0, 10, 0, 0),
-                    Style = (Style)FindResource("GameButtonStyle"),
-                    FontSize = 13,
-                    Background = new SolidColorBrush(Color.FromRgb(50, 150, 50))
-                };
-                confirmButton.Click += (s, e) =>
-                {
-                    ExecuteTrade(_tradeFromResource.Value, _tradeFromAmount, _tradeToResource.Value);
-                };
-                panel.Children.Add(confirmButton);
-            }
-            else
-            {
-                foreach (ResourceType resource in Enum.GetValues(typeof(ResourceType)))
-                {
-                    // Exclude diamonds from market trading (receive side)
-                    if (resource == ResourceType.Diamonds)
-                        continue;
-
-                    if (resource == _tradeFromResource.Value)
-                        continue;
-
-                    int receiveAmount = (int)(_tradeFromAmount * 0.6);
-
-                    var resourceButton = new Button
-                    {
-                        Content = $"{GetResourceName(resource)}\n({services.LocalizationService.Instance["Trade_WillReceive"]} {receiveAmount})",
-                        Height = 60,
-                        Margin = new Thickness(0, 0, 0, 10),
-                        Style = (Style)FindResource("GameButtonStyle"),
-                        FontSize = 12
-                    };
-                    resourceButton.Click += (s, e) =>
-                    {
-                        _tradeToResource = resource;
-                        RightPanelContent.Content = CreateTradePanelContent();
-                    };
-                    panel.Children.Add(resourceButton);
-                }
-            }
-        }
-
-        return panel;
     }
 
     private void ExecuteTrade(ResourceType fromResource, int fromAmount, ResourceType toResource)
@@ -2934,15 +2535,13 @@ public partial class GameView : UserControl
 
         UpdateResourceDisplay();
 
-        // Reset trading state to stage 1
-        _tradeStage = 1;
-        _tradeFromResource = null;
-        _tradeFromAmount = 0;
-        _tradeToResource = null;
-
         if (_currentOpenPanel == "trade")
         {
-            RightPanelContent.Content = CreateTradePanelContent();
+            if (_tradeView != null)
+            {
+                bool hasMarketplace = _map?.Buildings.Any(b => b.Type == BuildingType.Marketplace) ?? false;
+                _tradeView.UpdateTrade(_resources, hasMarketplace);
+            }
         }
     }
 
@@ -3111,12 +2710,6 @@ public partial class GameView : UserControl
 
     private void ShowBuildingInfoPanel(Building building)
     {
-        // Only reset delete confirmation if selecting a different building
-        if (_selectedBuilding != building)
-        {
-            _deleteConfirmationState = false;
-        }
-
         _selectedBuilding = building;
 
         string buildingName = building.Type switch
@@ -3136,428 +2729,32 @@ public partial class GameView : UserControl
 
         _currentOpenPanel = "buildingInfo";
         RightPanelTitle.Text = buildingName;
-        RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+
+        InitializeViewsIfNeeded();
+        if (_buildingInfoView != null)
+        {
+            _buildingInfoView.UpdateBuilding(building, _resources, GetBuildCostMultiplier());
+            RightPanelContent.Content = _buildingInfoView;
+        }
+
         OpenRightPanel();
     }
 
-    private UIElement CreateBuildingInfoPanelContent(Building building)
+    private void UpdateBuildingInfoView(Building building)
     {
-        var panel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-
-        string description = building.Type switch
+        InitializeViewsIfNeeded();
+        if (_buildingInfoView != null)
         {
-            BuildingType.Base => services.LocalizationService.Instance["BuildingDesc_Base"],
-            BuildingType.Factory => services.LocalizationService.Instance["BuildingDesc_Factory"],
-            BuildingType.Mine => services.LocalizationService.Instance["BuildingDesc_Mine"],
-            BuildingType.MeatFactory => services.LocalizationService.Instance["BuildingDesc_MeatFactory"],
-            BuildingType.Sawmill => services.LocalizationService.Instance["BuildingDesc_Sawmill"],
-            BuildingType.Bank => services.LocalizationService.Instance["BuildingDesc_Bank"],
-            BuildingType.Marketplace => services.LocalizationService.Instance["BuildingDesc_Marketplace"],
-            BuildingType.Furnace => services.LocalizationService.Instance["BuildingDesc_Furnace"],
-            BuildingType.Altar => services.LocalizationService.Instance["BuildingDesc_Altar"],
-            BuildingType.Crystallizer => services.LocalizationService.Instance["BuildingDesc_Crystallizer"],
-            _ => services.LocalizationService.Instance["BuildingDesc_Generic"]
-        };
-
-        var descriptionText = new TextBlock
-        {
-            Text = description,
-            Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-            FontSize = 14,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 20)
-        };
-        panel.Children.Add(descriptionText);
-
-        if (building.Type != BuildingType.Base)
-        {
-            var levelText = new TextBlock
-            {
-                Text = $"{services.LocalizationService.Instance["BuildingPanel_Level"]} {building.Level}",
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                FontSize = 14,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            panel.Children.Add(levelText);
-
-            // Batch production UI for Altar and Crystallizer
-            if (building.Type == BuildingType.Altar || building.Type == BuildingType.Crystallizer)
-            {
-                if (building.IsBatchProducing)
-                {
-                    // Show production progress
-                    var producingLabel = new TextBlock
-                    {
-                        Text = services.LocalizationService.Instance["BatchProduction_Producing"],
-                        Foreground = new SolidColorBrush(Color.FromRgb(100, 200, 255)),
-                        FontSize = 14,
-                        FontWeight = FontWeights.Bold,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        Margin = new Thickness(0, 10, 0, 10)
-                    };
-                    panel.Children.Add(producingLabel);
-
-                    var remainingText = new TextBlock
-                    {
-                        Text = $"{services.LocalizationService.Instance["BatchProduction_Remaining"]} {building.BatchProductionRemaining}",
-                        Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                        FontSize = 16,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        Margin = new Thickness(0, 0, 0, 10)
-                    };
-                    panel.Children.Add(remainingText);
-
-                    var progressBar = new System.Windows.Controls.ProgressBar
-                    {
-                        Height = 15,
-                        Background = new SolidColorBrush(Color.FromRgb(40, 40, 40)),
-                        Foreground = new SolidColorBrush(Color.FromRgb(100, 200, 255)),
-                        Value = building.ProductionProgress * 100,
-                        Maximum = 100,
-                        Margin = new Thickness(0, 0, 0, 20)
-                    };
-                    panel.Children.Add(progressBar);
-
-                    var cancelButton = new Button
-                    {
-                        Content = services.LocalizationService.Instance["BatchProduction_Cancel"],
-                        Width = 200,
-                        Height = 45,
-                        Style = (Style)FindResource("GameButtonStyle"),
-                        Margin = new Thickness(0, 0, 0, 10)
-                    };
-                    cancelButton.Click += (s, e) => CancelBatchProduction(building);
-                    panel.Children.Add(cancelButton);
-
-                    var warningText = new TextBlock
-                    {
-                        Text = services.LocalizationService.Instance["BatchProduction_CancelWarning"],
-                        Foreground = new SolidColorBrush(Color.FromRgb(255, 150, 100)),
-                        FontSize = 11,
-                        TextWrapping = TextWrapping.Wrap,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        Margin = new Thickness(0, 0, 0, 20)
-                    };
-                    panel.Children.Add(warningText);
-                }
-                else
-                {
-                    // Show batch production setup
-                    int maxAmount = CalculateMaxBatchProduction(building);
-
-                    var amountLabel = new TextBlock
-                    {
-                        Text = services.LocalizationService.Instance["BatchProduction_Amount"],
-                        Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                        FontSize = 14,
-                        Margin = new Thickness(0, 10, 0, 5)
-                    };
-                    panel.Children.Add(amountLabel);
-
-                    var slider = new Slider
-                    {
-                        Minimum = 0,
-                        Maximum = maxAmount,
-                        Value = Math.Min(1, maxAmount),
-                        TickFrequency = 1,
-                        IsSnapToTickEnabled = true,
-                        Margin = new Thickness(0, 0, 0, 5)
-                    };
-
-                    var amountText = new TextBlock
-                    {
-                        Text = $"{(int)slider.Value} / {maxAmount}",
-                        Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                        FontSize = 12,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        Margin = new Thickness(0, 0, 0, 10)
-                    };
-                    panel.Children.Add(amountText);
-
-                    slider.ValueChanged += (s, e) =>
-                    {
-                        amountText.Text = $"{(int)slider.Value} / {maxAmount}";
-                    };
-
-                    panel.Children.Add(slider);
-
-                    // Show cost per unit
-                    var costPerUnitLabel = new TextBlock
-                    {
-                        Text = services.LocalizationService.Instance["BatchProduction_Input"],
-                        Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
-                        FontSize = 12,
-                        Margin = new Thickness(0, 0, 0, 5)
-                    };
-                    panel.Children.Add(costPerUnitLabel);
-
-                    var costPerUnitText = new TextBlock
-                    {
-                        Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                        FontSize = 11,
-                        Margin = new Thickness(0, 0, 0, 10)
-                    };
-                    var costLines = new List<string>();
-                    foreach (var input in building.BatchProductionInput)
-                    {
-                        costLines.Add($"{GetResourceName(input.Key)}: {input.Value}");
-                    }
-                    costPerUnitText.Text = string.Join(", ", costLines);
-                    panel.Children.Add(costPerUnitText);
-
-                    var startButton = new Button
-                    {
-                        Content = services.LocalizationService.Instance["BatchProduction_Start"],
-                        Width = 200,
-                        Height = 45,
-                        Style = (Style)FindResource("GameButtonStyle"),
-                        Margin = new Thickness(0, 10, 0, 20)
-                    };
-                    startButton.Click += (s, e) =>
-                    {
-                        int amount = (int)slider.Value;
-                        if (amount > 0)
-                        {
-                            StartBatchProduction(building, amount);
-                        }
-                    };
-
-                    if (maxAmount == 0)
-                    {
-                        startButton.IsEnabled = false;
-                        startButton.Opacity = 0.5;
-                    }
-
-                    panel.Children.Add(startButton);
-                }
-            }
-
-            var buttonsPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 20)
-            };
-
-            if (building.CanUpgrade())
-            {
-                var upgradeCost = building.GetUpgradeCost();
-                double costMultiplier = GetBuildCostMultiplier();
-                var adjustedUpgradeCost = ApplyCostMultiplier(upgradeCost, costMultiplier);
-
-                var upgradeContainer = new StackPanel
-                {
-                    Margin = new Thickness(0, 0, 10, 0)
-                };
-
-                var upgradeButton = new Button
-                {
-                    Content = services.LocalizationService.Instance["BuildingPanel_Upgrade"],
-                    Width = 120,
-                    Height = 45,
-                    Style = (Style)FindResource("GameButtonStyle"),
-                    FontSize = 11
-                };
-
-                bool canAfford = true;
-                foreach (var cost in adjustedUpgradeCost)
-                {
-                    if (!_resources.ContainsKey(cost.Key) || _resources[cost.Key] < cost.Value)
-                    {
-                        canAfford = false;
-                        break;
-                    }
-                }
-
-                if (!canAfford)
-                {
-                    upgradeButton.Opacity = 0.5;
-                    upgradeButton.IsEnabled = false;
-                }
-
-                upgradeButton.Click += (s, e) => UpgradeBuilding(building);
-                upgradeContainer.Children.Add(upgradeButton);
-
-                var costText = new TextBlock
-                {
-                    Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
-                    FontSize = 9,
-                    TextWrapping = TextWrapping.Wrap,
-                    Width = 120,
-                    TextAlignment = TextAlignment.Center,
-                    Margin = new Thickness(0, 5, 0, 0)
-                };
-
-                var costLines = new List<string>();
-                foreach (var cost in adjustedUpgradeCost)
-                {
-                    costLines.Add($"{GetResourceName(cost.Key)}: {cost.Value}");
-                }
-                costText.Text = string.Join("\n", costLines);
-
-                upgradeContainer.Children.Add(costText);
-                buttonsPanel.Children.Add(upgradeContainer);
-            }
-
-            var deleteButton = new Button
-            {
-                Content = _deleteConfirmationState
-                    ? services.LocalizationService.Instance["BuildingPanel_Sure"]
-                    : services.LocalizationService.Instance["BuildingPanel_Delete"],
-                Width = 120,
-                Height = 45,
-                Style = (Style)FindResource("GameButtonStyle"),
-                Foreground = _deleteConfirmationState
-                    ? new SolidColorBrush(Color.FromRgb(255, 100, 100))
-                    : Brushes.White
-            };
-            deleteButton.Click += (s, e) =>
-            {
-                if (!_deleteConfirmationState)
-                {
-                    _deleteConfirmationState = true;
-                    deleteButton.Content = services.LocalizationService.Instance["BuildingPanel_Sure"];
-                    deleteButton.Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100));
-                }
-                else
-                {
-                    DeleteBuilding(building);
-                }
-            };
-
-            buttonsPanel.Children.Add(deleteButton);
-            panel.Children.Add(buttonsPanel);
-
-            var progressLabel = new TextBlock
-            {
-                Text = services.LocalizationService.Instance["BuildingPanel_Production"],
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                FontSize = 12,
-                Margin = new Thickness(0, 10, 0, 10)
-            };
-            panel.Children.Add(progressLabel);
-
-            _currentProgressBars.Clear();
-
-            foreach (var output in building.ProductionOutput)
-            {
-                var progressContainer = new StackPanel
-                {
-                    Margin = new Thickness(0, 0, 0, 10)
-                };
-
-                string resourceName = GetResourceName(output.Key);
-                var resourceLabel = new TextBlock
-                {
-                    Text = $"{resourceName} +{output.Value}",
-                    Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
-                    FontSize = 11,
-                    Margin = new Thickness(0, 0, 0, 5)
-                };
-                progressContainer.Children.Add(resourceLabel);
-
-                var progressBar = new System.Windows.Controls.ProgressBar
-                {
-                    Height = 8,
-                    Background = new SolidColorBrush(Color.FromRgb(40, 40, 40)),
-                    Foreground = new SolidColorBrush(Color.FromRgb(100, 150, 255)),
-                    Value = building.ProductionProgress * 100,
-                    Maximum = 100
-                };
-                progressContainer.Children.Add(progressBar);
-                _currentProgressBars.Add(progressBar);
-
-                panel.Children.Add(progressContainer);
-            }
-
-            if (building.Type == BuildingType.Bank)
-            {
-                var investmentLabel = new TextBlock
-                {
-                    Text = services.LocalizationService.Instance["BuildingPanel_Investment"],
-                    Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                    FontSize = 12,
-                    Margin = new Thickness(0, 10, 0, 10)
-                };
-                panel.Children.Add(investmentLabel);
-
-                if (building.IsInvesting)
-                {
-                    var investingText = new TextBlock
-                    {
-                        Text = $"{services.LocalizationService.Instance["BuildingPanel_Invested"]} {building.InvestmentAmount} {GetResourceName(building.InvestmentResource!.Value)}",
-                        Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
-                        FontSize = 11,
-                        Margin = new Thickness(0, 0, 0, 5)
-                    };
-                    panel.Children.Add(investingText);
-
-                    var investmentProgressBar = new System.Windows.Controls.ProgressBar
-                    {
-                        Height = 8,
-                        Background = new SolidColorBrush(Color.FromRgb(40, 40, 40)),
-                        Foreground = new SolidColorBrush(Color.FromRgb(200, 180, 50)),
-                        Value = building.InvestmentProgress * 100,
-                        Maximum = 100,
-                        Margin = new Thickness(0, 0, 0, 5)
-                    };
-                    panel.Children.Add(investmentProgressBar);
-
-                    double investmentDuration = building.Level == 1 ? 200.0 : 180.0;
-                    double timeRemaining = investmentDuration * (1 - building.InvestmentProgress);
-                    var timeText = new TextBlock
-                    {
-                        Text = $"{services.LocalizationService.Instance["BuildingPanel_Remaining"]} {timeRemaining:F1}с",
-                        Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                        FontSize = 10
-                    };
-                    panel.Children.Add(timeText);
-                }
-                else if (building.InvestmentCooldown > 0)
-                {
-                    var cooldownText = new TextBlock
-                    {
-                        Text = $"{services.LocalizationService.Instance["BuildingPanel_Cooldown"]} {building.InvestmentCooldown:F1}с",
-                        Foreground = new SolidColorBrush(Color.FromRgb(180, 100, 100)),
-                        FontSize = 11
-                    };
-                    panel.Children.Add(cooldownText);
-                }
-                else
-                {
-                    var investButtonsPanel = new StackPanel
-                    {
-                        Margin = new Thickness(0, 5, 0, 0)
-                    };
-
-                    foreach (ResourceType resourceType in Enum.GetValues(typeof(ResourceType)))
-                    {
-                        // Exclude diamonds from bank investment
-                        if (resourceType == ResourceType.Diamonds)
-                            continue;
-
-                        if (_resources.ContainsKey(resourceType) && _resources[resourceType] > 100)
-                        {
-                            var investButton = new Button
-                            {
-                                Content = $"{services.LocalizationService.Instance["BuildingPanel_Invest"]} {GetResourceName(resourceType)}",
-                                Height = 50,
-                                Margin = new Thickness(0, 0, 0, 5),
-                                Style = (Style)FindResource("GameButtonStyle"),
-                                FontSize = 10
-                            };
-                            investButton.Click += (s, e) => StartInvestment(building, resourceType, 100);
-                            investButtonsPanel.Children.Add(investButton);
-                        }
-                    }
-
-                    panel.Children.Add(investButtonsPanel);
-                }
-            }
+            _buildingInfoView.UpdateBuilding(building, _resources, GetBuildCostMultiplier());
         }
+    }
 
-        return panel;
+    private void UpdateResearchView()
+    {
+        if (_researchView != null)
+        {
+            _researchView.UpdateResearch(_availableResearch, _currentResearch, _resources);
+        }
     }
 
     private void DeleteBuilding(Building building)
@@ -3569,7 +2766,24 @@ public partial class GameView : UserControl
         var childrenToRemove = new List<UIElement>();
         foreach (UIElement child in MapCanvas.Children)
         {
-            if (child is Ellipse ellipse)
+            if (child is Canvas canvas)
+            {
+                double left = Canvas.GetLeft(canvas);
+                double top = Canvas.GetTop(canvas);
+                double centerX = left + canvas.Width / 2;
+                double centerY = top + canvas.Height / 2;
+
+                double distance = Math.Sqrt(
+                    Math.Pow(centerX - building.Position.X, 2) +
+                    Math.Pow(centerY - building.Position.Y, 2)
+                );
+
+                if (distance < 1)
+                {
+                    childrenToRemove.Add(child);
+                }
+            }
+            else if (child is Ellipse ellipse)
             {
                 double left = Canvas.GetLeft(ellipse);
                 double top = Canvas.GetTop(ellipse);
@@ -3656,7 +2870,7 @@ public partial class GameView : UserControl
 
         if (_selectedBuilding == building)
         {
-            RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+            UpdateBuildingInfoView(building);
         }
     }
 
@@ -3688,7 +2902,7 @@ public partial class GameView : UserControl
 
         if (_selectedBuilding == building)
         {
-            RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+            UpdateBuildingInfoView(building);
         }
     }
 
@@ -3718,7 +2932,7 @@ public partial class GameView : UserControl
 
                 if (_selectedBuilding == building)
                 {
-                    RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+                    UpdateBuildingInfoView(building);
                 }
                 continue;
             }
@@ -3747,7 +2961,7 @@ public partial class GameView : UserControl
 
                 if (_selectedBuilding == building)
                 {
-                    RightPanelContent.Content = CreateBuildingInfoPanelContent(building);
+                    UpdateBuildingInfoView(building);
                 }
             }
         }
@@ -3761,22 +2975,81 @@ public partial class GameView : UserControl
         }
         else
         {
-            // Clear selected building when opening menu panels
             _selectedBuilding = null;
-
             _currentOpenPanel = panelType;
             RightPanelTitle.Text = title;
 
+            InitializeViewsIfNeeded();
+
             RightPanelContent.Content = panelType switch
             {
-                "build" => CreateBuildPanelContent(),
-                "research" => CreateResearchPanelContent(),
-                "trade" => CreateTradePanelContent(),
+                "build" => GetBuildingMenuView(),
+                "research" => GetResearchView(),
+                "trade" => GetTradeView(),
                 _ => null
             };
 
             OpenRightPanel();
         }
+    }
+
+    private void InitializeViewsIfNeeded()
+    {
+        if (_buildingMenuView == null)
+        {
+            _buildingMenuView = new BuildingMenuView();
+            _buildingMenuView.BuildingSelected += (buildingType) => StartBuildMode(buildingType);
+        }
+
+        if (_researchView == null)
+        {
+            _researchView = new ResearchView();
+            _researchView.ResearchStarted += (research) => StartResearch(research);
+        }
+
+        if (_tradeView == null)
+        {
+            _tradeView = new TradeView();
+            _tradeView.TradeExecuted += (fromResource, fromAmount, toResource) => ExecuteTrade(fromResource, fromAmount, toResource);
+        }
+
+        if (_buildingInfoView == null)
+        {
+            _buildingInfoView = new BuildingInfoView();
+            _buildingInfoView.UpgradeClicked += (building) => UpgradeBuilding(building);
+            _buildingInfoView.DeleteClicked += (building) => DeleteBuilding(building);
+            _buildingInfoView.InvestmentStarted += (building, resourceType, amount) => StartInvestment(building, resourceType, amount);
+            _buildingInfoView.BatchProductionStarted += (building, amount) => StartBatchProduction(building, amount);
+            _buildingInfoView.BatchProductionCancelled += (building) => CancelBatchProduction(building);
+        }
+    }
+
+    private UserControl GetBuildingMenuView()
+    {
+        if (_buildingMenuView != null)
+        {
+            _buildingMenuView.UpdateResources(_resources, GetBuildCostMultiplier());
+        }
+        return _buildingMenuView!;
+    }
+
+    private UserControl GetResearchView()
+    {
+        if (_researchView != null)
+        {
+            _researchView.UpdateResearch(_availableResearch, _currentResearch, _resources);
+        }
+        return _researchView!;
+    }
+
+    private UserControl GetTradeView()
+    {
+        if (_tradeView != null)
+        {
+            bool hasMarketplace = _map?.Buildings.Any(b => b.Type == BuildingType.Marketplace) ?? false;
+            _tradeView.UpdateTrade(_resources, hasMarketplace);
+        }
+        return _tradeView!;
     }
 
     private void OpenRightPanel()
